@@ -1,6 +1,5 @@
 ## If you find this code useful, please provide a reference to my github page for others www.github.com/brianmanderson , thank you!
-### This builds off of the function found here 
-### https://github.com/brianmanderson/Dicom_Data_to_Numpy_Arrays and into https://github.com/brianmanderson/Data_Generators
+### This builds off of the function found here https://github.com/brianmanderson/Dicom_Data_to_Numpy_Arrays and into https://github.com/brianmanderson/Data_Generators
 
 This takes the 3D images created from Dicom_to_Numpy_Arrays and creates a folder called Single_Images3D which identifies which slices have annotations and creates 2D images of the entire process
 
