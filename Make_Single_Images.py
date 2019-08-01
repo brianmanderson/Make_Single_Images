@@ -1,6 +1,6 @@
 import os, pickle
 import numpy as np
-if os.path.exists('\\\\mymdafiles\\di_data1\\'):
+if os.path.exists(r'K:\Morfeus'):
     from TensorflowUtils import plot_scroll_Image, visualize, plt
 from threading import Thread
 from multiprocessing import cpu_count
