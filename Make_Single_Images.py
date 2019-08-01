@@ -133,7 +133,7 @@ def worker_def(q):
             objective(item)
             q.task_done()
 
-def main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',
+def run_main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',
          pickle_file=os.path.join(r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments\patient_info.pkl'),
          extension=999):
     '''
@@ -162,4 +162,4 @@ def main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',
     for t in threads:
         t.join()
 if __name__ == '__main__':
-    main()
+    run_main()
