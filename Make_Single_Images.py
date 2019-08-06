@@ -135,17 +135,17 @@ def worker_def(q):
 
 def run_main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',
          pickle_file=os.path.join(r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments\patient_info.pkl'),
-         extension=999):
+         extension=999,write_images=True,re_write_pickle=False):
     '''
     :param path: Path to parent folder that has a 'Test','Train', and 'Validation' folder
     :param pickle_file: path to 'patient_info' file
     :param extension: How many images do you want above and below your segmentations
+    :param write_images: Write out the images?
+    :param re_write_pickle: re-write the pickle file? If true, will require loading images again
     :return:
     '''
     patient_info = load_obj(pickle_file)
     thread_count = int(cpu_count()*.75-1)  # Leaves you one thread for doing things with
-    write_images = True
-    re_write_pickle = True
     # thread_count = 1
     print('This is running on ' + str(thread_count) + ' threads')
     q = Queue(maxsize=thread_count)
@@ -162,4 +162,4 @@ def run_main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',
     for t in threads:
         t.join()
 if __name__ == '__main__':
-    run_main()
+    xxx = 1
