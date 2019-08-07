@@ -107,7 +107,7 @@ def main(path,write_data=True, extension=999, q=None, re_write_pickle=True, pati
         stop_images = min([stop + extension,images.shape[-1]])
         if write_data:
             for i in range(start_images,stop_images):
-                q.put([desc, path, out_path_name, files_in_loc, i, images[...,i],annotation[...,i]])
+                q.put([desc, path, out_path_name, files_in_loc, i, images[...,i],annotation[...,i], np.max(max_vals)])
                 # pool.map(write_output, ([desc, path, out_path_name, files_in_loc, i, images[:,:,:,i],annotation[:,:,:,i]] for i in range(start,stop)))
         print((status+1)/total * 100)
         status += 1
@@ -115,14 +115,18 @@ def main(path,write_data=True, extension=999, q=None, re_write_pickle=True, pati
 
 
 def write_output(A):
-    desc, path, out_path_name, files_in_loc, i, image, annotation = A
+    desc, path, out_path_name, files_in_loc, i, image, annotation, max_val = A
     file_name_image = desc + '_' + str(i) + '_image.npy'
     file_name_annotation = file_name_image.replace('_image.npy', '_annotation.npy')
     file_name_image = os.path.join(path, out_path_name, file_name_image)
     file_name_annotation = os.path.join(path, out_path_name, file_name_annotation)
     if file_name_image not in files_in_loc or file_name_annotation not in files_in_loc:
         np.save(file_name_image, image.astype('float32'))
-        np.save(file_name_annotation, annotation.astype('bool'))
+        if max_val == 1:
+            dtype = 'bool'
+        else:
+            dtype = 'int8'
+        np.save(file_name_annotation, annotation.astype(dtype))
     return None
 
 
@@ -149,7 +153,6 @@ def run_main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',
     '''
     patient_info = load_obj(pickle_file)
     thread_count = int(cpu_count()*.75-1)  # Leaves you one thread for doing things with
-    # thread_count = 1
     print('This is running on ' + str(thread_count) + ' threads')
     q = Queue(maxsize=thread_count)
     threads = []
