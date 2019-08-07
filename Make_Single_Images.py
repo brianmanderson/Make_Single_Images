@@ -113,14 +113,17 @@ def main(path,write_data=True, extension=999, q=None, re_write_pickle=True, pati
         status += 1
     save_obj(os.path.join(path,out_path_name,'descriptions_start_and_stop.pkl'),out_dict)
 
+
 def write_output(A):
-        desc, path, out_path_name, files_in_loc, i, image, annotation = A
-        file_name = desc + '_' + str(i) + '.npy'
-        out_file_name = os.path.join(path,out_path_name,file_name)
-        if file_name not in files_in_loc:
-            output = np.concatenate((image, annotation), axis=0)
-            np.save(out_file_name, output)
-        return None
+    desc, path, out_path_name, files_in_loc, i, image, annotation = A
+    file_name_image = desc + '_' + str(i) + '_image.npy'
+    file_name_annotation = file_name_image.replace('_image.npy', '_annotation.npy')
+    file_name_image = os.path.join(path, out_path_name, file_name_image)
+    file_name_annotation = os.path.join(path, out_path_name, file_name_annotation)
+    if file_name_image not in files_in_loc or file_name_annotation not in files_in_loc:
+        np.save(file_name_image, image.astype('float32'))
+        np.save(file_name_annotation, annotation.astype('bool'))
+    return None
 
 
 def worker_def(q):
