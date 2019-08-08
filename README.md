@@ -5,7 +5,7 @@ This takes the 3D images created from Dicom_to_Numpy_Arrays and creates a folder
 
 The reason for this is that you can manipulate how many images you want to load with the data generators, saving time by making it that you don't need to load the entire patient
 
-    from Make_Single_Images import main
+    from Make_Single_Images import run_main
     
-    main(path=r'\Path\To\Images\',pickle_path='\Path\To\Pickle.pkl',extension=50')
+    run_main(path=r'\Path\To\Images\',pickle_path='\Path\To\Pickle.pkl',extension=50')
 This is saying we want to grab 50 images above and below the slices which have annotations
