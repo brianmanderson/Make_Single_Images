@@ -1,5 +1,6 @@
 import os, pickle
 import numpy as np
+import SimpleITK as sitk
 if os.path.exists(r'K:\Morfeus'):
     from TensorflowUtils import plot_scroll_Image, visualize, plt
 from threading import Thread
@@ -25,8 +26,43 @@ def load_obj(path):
         out = {}
         return out
 
+class Resample_Class(object):
+    '''
+    Feed in images in form of #images, rows, cols
+    '''
+    def __init__(self):
+        self.Resample = sitk.ResampleImageFilter()
+    def resample_image(self,input_image, input_spacing=(0.975,0.975,2.5),output_spacing=(0.975,0.975,2.5),
+                       is_annotation=False):
+        '''
+        :param input_image: Image of the shape # images, rows, cols
+        :param spacing: Goes in the form of (row_dim, col_dim, z_dim) (I know it's confusing..)
+        :param is_annotation: Whether to use Linear or NearestNeighbor, Nearest should be used for annotations
+        :return:
+        '''
+        output_spacing = np.asarray(output_spacing)
+        self.Resample.SetOutputSpacing(output_spacing)
+        if is_annotation:
+            self.Resample.SetInterpolator(sitk.sitkNearestNeighbor)
+        else:
+            self.Resample.SetInterpolator(sitk.sitkLinear)
 
-def main(path,write_data=True, extension=999, q=None, re_write_pickle=True, patient_info=None):
+        image = sitk.GetImageFromArray(input_image)
+        image.SetSpacing(input_spacing)
+        orig_size = np.array(image.GetSize(),dtype=np.int)
+        orig_spacing = np.asarray(image.GetSpacing())
+        new_size = orig_size * (orig_spacing / output_spacing)
+        new_size = np.ceil(new_size).astype(np.int)  # Image dimensions are in integers
+        new_size = [np.int(i) for i in new_size]
+        self.Resample.SetSize(new_size)
+        self.Resample.SetOutputDirection(image.GetDirection())
+        self.Resample.SetOutputOrigin(image.GetOrigin())
+        output = self.Resample.Execute(image)
+        output = sitk.GetArrayFromImage(output)
+        return output
+
+def main(path,write_data=True, extension=999, q=None, re_write_pickle=True, patient_info=dict(), resampler=None, desired_output_spacing=(None,None,2.5)):
+    # Annotations should be up the shape [1, 512, 512, # classes, # images]
     if not write_data:
         print('Not writing out data')
     out_path_name = 'Single_Images3D'
@@ -88,11 +124,42 @@ def main(path,write_data=True, extension=999, q=None, re_write_pickle=True, pati
         image_axis = images.shape[-1]
         annotation_axis = annotation.shape.index(image_axis)
         annotation = np.moveaxis(annotation,annotation_axis,-1)
-        if len(annotation.shape) == 4:
-            max_vals = np.max(annotation, axis=(0, 1, 2))
-        else:
-            images = np.expand_dims(images,axis=3)
-            max_vals = np.max(annotation,axis=(0,1,2,3))
+        if annotation.shape[-2] == annotation.shape[-3]:
+            annotation = np.expand_dims(annotation,axis=-2)
+
+        if resampler is not None:
+            descriptions = desc.split('_')
+            info = None
+            for i in range(len(descriptions)):
+                if descriptions[i] in patient_info:
+                    info = patient_info[descriptions[i]][descriptions[i + 1]].split(',')
+                    break
+            if info:
+                pat_id, slice_thickness, x_y_resolution = info
+                temp_images = np.transpose(images[0,...],axes=(-1,0,1))
+                temp_annotations = np.transpose(annotation[0,...],axes=(-1,0,1,2))
+                input_spacing = (float(x_y_resolution), float(x_y_resolution), float(slice_thickness))
+                output_spacing = []
+                if desired_output_spacing[0] is None:
+                    output_spacing.append(float(x_y_resolution))
+                    output_spacing.append(float(x_y_resolution))
+                else:
+                    output_spacing.append(desired_output_spacing[0])
+                    output_spacing.append(desired_output_spacing[1])
+                output_spacing.append(desired_output_spacing[-1])
+                output_spacing = tuple(output_spacing)
+                print('Resampling to ' + str(output_spacing))
+                resized_images = resampler.resample_image(input_image=temp_images,input_spacing=input_spacing,
+                                                          output_spacing=output_spacing,is_annotation=False)
+                resized_annotations = np.zeros(resized_images.shape + (annotation.shape[3],))
+                for i in range(temp_annotations.shape[-1]):
+                    resized_annotations[...,i] = resampler.resample_image(input_image=temp_annotations[...,i], input_spacing=input_spacing,
+                                                                          output_spacing=output_spacing,is_annotation=True)
+                images = np.transpose(resized_images,axes=(1,2,0))[None,...]
+                annotation = np.transpose(resized_annotations,axes=(1,2,3,0))[None,...]
+
+        # Annotations should be up the shape [1, 512, 512, # classes, # images]
+        max_vals = np.max(annotation,axis=(0,1,2,3))
         non_zero_values = np.where(max_vals != 0)[0]
         if not np.any(non_zero_values):
             print('Found nothing for ' + file)
@@ -100,9 +167,9 @@ def main(path,write_data=True, extension=999, q=None, re_write_pickle=True, pati
         start = non_zero_values[0]
         stop = non_zero_values[-1]
         out_dict[desc] = {'start':start,'stop':stop}
-        for val in range(1,np.max(max_vals)+1):
-            slices = np.where(annotation == val)[-1]
-            out_dict[desc][val] = np.unique(slices)
+        for val in range(annotation.shape[-2]):
+            slices = np.where(annotation[0,:,:,val,:] == 1)[-1]
+            out_dict[desc][val+1] = np.unique(slices)
         start_images = max([start - extension,0])
         stop_images = min([stop + extension,images.shape[-1]])
         if write_data:
@@ -140,19 +207,25 @@ def worker_def(q):
             objective(item)
             q.task_done()
 
-def run_main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',
-         pickle_file=os.path.join(r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments\patient_info.pkl'),
-         extension=999,write_images=True,re_write_pickle=False):
+def run_main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',desired_output_spacing=(None,None,2.5),
+         extension=999,write_images=True,re_write_pickle=False, pickle_path=None, resample=False):
     '''
     :param path: Path to parent folder that has a 'Test','Train', and 'Validation' folder
     :param pickle_file: path to 'patient_info' file
     :param extension: How many images do you want above and below your segmentations
     :param write_images: Write out the images?
     :param re_write_pickle: re-write the pickle file? If true, will require loading images again
+    :param desired_output_spacing: desired spacing of output images in mm (dx, dy, dz), None will not change
     :return:
     '''
-    patient_info = load_obj(pickle_file)
+    patient_info = dict()
+    if pickle_path:
+        patient_info = load_obj(pickle_path)
     thread_count = int(cpu_count()*.75-1)  # Leaves you one thread for doing things with
+    # thread_count = 1
+    resampler = None
+    if resample:
+        resampler = Resample_Class()
     print('This is running on ' + str(thread_count) + ' threads')
     q = Queue(maxsize=thread_count)
     threads = []
@@ -162,10 +235,15 @@ def run_main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',
         threads.append(t)
     for added_ext in ['']:
         for ext in ['Test','Train','Validation']:
-            main(write_data=write_images,path=os.path.join(path,ext+added_ext), extension=extension, q=q, patient_info=patient_info, re_write_pickle=re_write_pickle)
+            main(write_data=write_images,path=os.path.join(path,ext+added_ext), extension=extension, q=q, re_write_pickle=re_write_pickle, patient_info=patient_info, resampler=resampler,
+                 desired_output_spacing=desired_output_spacing)
     for i in range(thread_count):
         q.put(None)
     for t in threads:
         t.join()
 if __name__ == '__main__':
+    # path = r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Ablation_Zones\Numpy_Ablation_Zones'
+    # run_main(path=os.path.join(path,'CT'),
+    #          pickle_path=os.path.join(path,'patient_info_Ablation_Zones.pkl'),
+    #          resample=True, desired_output_spacing=(None,None,2.5))
     xxx = 1
