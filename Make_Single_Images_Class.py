@@ -98,7 +98,7 @@ def main(path,write_data=True, extension=999, q=None, re_write_pickle=True, pati
 
         found = False
         for i in range(999):
-            out_file_name = desc + '_' + str(i) + '.npy'
+            out_file_name = desc + '_' + str(i) + '_image.npy'
             if out_file_name in files_in_loc:
                 found = True
                 break
@@ -222,7 +222,7 @@ def run_main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',d
     if pickle_path:
         patient_info = load_obj(pickle_path)
     thread_count = int(cpu_count()*.75-1)  # Leaves you one thread for doing things with
-    # thread_count = 1
+    thread_count = 1
     resampler = None
     if resample:
         resampler = Resample_Class()
