@@ -154,7 +154,7 @@ def main(path,write_data=True, extension=999, q=None, re_write_pickle=True, pati
                 resized_annotations = np.zeros(resized_images.shape + (annotation.shape[3],))
                 for i in range(temp_annotations.shape[-1]):
                     resized_annotations[...,i] = resampler.resample_image(input_image=temp_annotations[...,i], input_spacing=input_spacing,
-                                                                          output_spacing=output_spacing,is_annotation=True)
+                                                                          output_spacing=output_spacing)
                 images = np.transpose(resized_images,axes=(1,2,0))[None,...]
                 annotation = np.transpose(resized_annotations,axes=(1,2,3,0))[None,...]
 
@@ -208,7 +208,7 @@ def worker_def(q):
             q.task_done()
 
 def run_main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',desired_output_spacing=(None,None,2.5),
-         extension=999,write_images=True,re_write_pickle=False, pickle_path=None, resample=False):
+         extension=999,write_images=True,re_write_pickle=False, pickle_path=None, resample=False, resampler=None):
     '''
     :param path: Path to parent folder that has a 'Test','Train', and 'Validation' folder
     :param pickle_file: path to 'patient_info' file
@@ -222,8 +222,7 @@ def run_main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',d
     if pickle_path:
         patient_info = load_obj(pickle_path)
     thread_count = int(cpu_count()*.75-1)  # Leaves you one thread for doing things with
-    thread_count = 1
-    resampler = None
+    # thread_count = 1
     if resample:
         resampler = Resample_Class()
     print('This is running on ' + str(thread_count) + ' threads')
