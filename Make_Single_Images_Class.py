@@ -102,7 +102,7 @@ def main(path,write_data=True, extension=999, q=None, re_write_pickle=True, pati
             if out_file_name in files_in_loc:
                 found = True
                 break
-        if found and not re_write_pickle: # and not write_pickle
+        if found and not re_write_pickle and desc in out_dict: # if the desc isn't in the out dict, re-run it
             continue
         annotation = np.load(os.path.join(path,file))
         if path.find('LiTs') != -1:
@@ -148,15 +148,18 @@ def main(path,write_data=True, extension=999, q=None, re_write_pickle=True, pati
                     output_spacing.append(desired_output_spacing[1])
                 output_spacing.append(desired_output_spacing[-1])
                 output_spacing = tuple(output_spacing)
-                print('Resampling to ' + str(output_spacing))
-                resized_images = resampler.resample_image(input_image=temp_images,input_spacing=input_spacing,
-                                                          output_spacing=output_spacing,is_annotation=False)
-                resized_annotations = np.zeros(resized_images.shape + (annotation.shape[3],))
-                for i in range(temp_annotations.shape[-1]):
-                    resized_annotations[...,i] = resampler.resample_image(input_image=temp_annotations[...,i], input_spacing=input_spacing,
-                                                                          output_spacing=output_spacing)
-                images = np.transpose(resized_images,axes=(1,2,0))[None,...]
-                annotation = np.transpose(resized_annotations,axes=(1,2,3,0))[None,...]
+                if output_spacing[-1] >= input_spacing[-1]:
+                    print('Resampling to ' + str(output_spacing))
+                    resized_images = resampler.resample_image(input_image=temp_images,input_spacing=input_spacing,
+                                                              output_spacing=output_spacing,is_annotation=False)
+                    resized_annotations = np.zeros(resized_images.shape + (annotation.shape[3],))
+                    for i in range(temp_annotations.shape[-1]):
+                        resized_annotations[...,i] = resampler.resample_image(input_image=temp_annotations[...,i], input_spacing=input_spacing,
+                                                                              output_spacing=output_spacing)
+                    images = np.transpose(resized_images,axes=(1,2,0))[None,...]
+                    annotation = np.transpose(resized_annotations,axes=(1,2,3,0))[None,...]
+                # else:
+                #     print('Only downsampling, not upsampling')
 
         # Annotations should be up the shape [1, 512, 512, # classes, # images]
         max_vals = np.max(annotation,axis=(0,1,2,3))
