@@ -6,6 +6,7 @@ if os.path.exists(r'K:\Morfeus'):
 from threading import Thread
 from multiprocessing import cpu_count
 from queue import *
+import nibabel as nib
 
 
 def save_obj(path, obj): # Save almost anything.. dictionary, list, etc.
@@ -191,12 +192,16 @@ def write_output(A):
     file_name_image = os.path.join(path, out_path_name, file_name_image)
     file_name_annotation = os.path.join(path, out_path_name, file_name_annotation)
     if file_name_image not in files_in_loc or file_name_annotation not in files_in_loc:
-        np.save(file_name_image, image.astype('float32'))
+        new_image = nib.Nifti1Image(image.astype('float32'), affine=np.eye(4))
+        nib.save(new_image, file_name_image.replace('.npy','.nii.gz'))
+        # np.save(file_name_image, image.astype('float32'))
         if max_val == 1:
             dtype = 'bool'
         else:
             dtype = 'int8'
-        np.save(file_name_annotation, annotation.astype(dtype))
+        new_annotation = nib.Nifti1Image(annotation.astype(dtype), affine=np.eye(4))
+        nib.save(new_annotation, file_name_annotation.replace('.npy','.nii.gz'))
+        # np.save(file_name_annotation, annotation.astype(dtype))
     return None
 
 
