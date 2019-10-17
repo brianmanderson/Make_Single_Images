@@ -106,7 +106,7 @@ def main(path,write_data=True, extension=999, q=None, re_write_pickle=True, pati
                 break
         if found and not re_write_pickle and desc in out_dict: # if the desc isn't in the out dict, re-run it
             continue
-        if ext == 'npy':
+        if ext == '.npy':
             annotation = np.load(os.path.join(path,file))
         else:
             annotation = nib.load(os.path.join(path,file)).get_fdata()
