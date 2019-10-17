@@ -80,6 +80,9 @@ def main(path,write_data=True, extension=999, q=None, re_write_pickle=True, pati
     total = len(files)/2
     out_dict = load_obj(os.path.join(path,out_path_name,'descriptions_start_and_stop.pkl'))
     for file in files:
+        ext = '.npy'
+        if file.find(ext) == -1:
+            ext = '.nii.gz'
         if file.find('Overall_Data') == 0 or file.find('instructions') == 0 or file.find('_mask') == -1:
             continue
         pat_desc = (file.split('Overall_mask_')[1])
@@ -87,29 +90,33 @@ def main(path,write_data=True, extension=999, q=None, re_write_pickle=True, pati
             pat_desc = pat_desc.split('_y')[0]
         else:
             pat_desc = pat_desc.split('_')[0]
-        if pat_desc.find('.npy') == -1:
-            desc = pat_desc + '_' + file.split('_y')[-1][:-4]
-            image_path = 'Overall_Data_' + (file.split('Overall_mask_')[1]).split('_y')[0] + '_' + file.split('_y')[-1][
-                                                                                                   :-4] + \
-                         '.npy'
+        if pat_desc.find(ext) == -1:
+            desc = pat_desc + '_' + file.split('_y')[-1].split('.')[0]
+            image_path = 'Overall_Data_' + (file.split('Overall_mask_')[1]).split('_y')[0] + '_' + file.split('_y')[-1].split('.')[0] + ext
         else:
-            desc = path.split('\\')[-2] + '_' + file.split('_y')[-1][:-4]
+            desc = path.split('\\')[-2] + '_' + file.split('_y')[-1].split('.')[0]
             image_path = 'Overall_Data_' + file.split('_y')[-1]
 
 
         found = False
         for i in range(999):
-            out_file_name = desc + '_' + str(i) + '_image.npy'
+            out_file_name = desc + '_' + str(i) + '_image' + ext
             if out_file_name in files_in_loc:
                 found = True
                 break
         if found and not re_write_pickle and desc in out_dict: # if the desc isn't in the out dict, re-run it
             continue
-        annotation = np.load(os.path.join(path,file))
+        if ext == 'npy':
+            annotation = np.load(os.path.join(path,file))
+        else:
+            annotation = nib.load(os.path.join(path,file)).get_fdata()
         if path.find('LiTs') != -1:
             if np.max(annotation) == 1:
                 return None
-        images = np.load(os.path.join(path,image_path))
+        if ext == '.npy':
+            images = np.load(os.path.join(path,image_path))
+        else:
+            images = nib.load(os.path.join(path,image_path)).get_fdata()
         if images.max() < 500:
             print('Image intensities are odd..')
         if path.find('Numpy_GTV_Ablation') != -1:
@@ -187,20 +194,17 @@ def main(path,write_data=True, extension=999, q=None, re_write_pickle=True, pati
 
 def write_output(A):
     desc, path, out_path_name, files_in_loc, i, image, annotation, max_val = A
-    file_name_image = desc + '_' + str(i) + '_image.npy'
-    file_name_annotation = file_name_image.replace('_image.npy', '_annotation.npy')
+    file_name_image = desc + '_' + str(i) + '_image.nii.gz'
+    file_name_annotation = file_name_image.replace('_image.nii.gz', '_annotation.nii.gz')
     file_name_image = os.path.join(path, out_path_name, file_name_image)
     file_name_annotation = os.path.join(path, out_path_name, file_name_annotation)
     if file_name_image not in files_in_loc or file_name_annotation not in files_in_loc:
         new_image = nib.Nifti1Image(image.astype('float32'), affine=np.eye(4))
-        nib.save(new_image, file_name_image.replace('.npy','.nii.gz'))
+        nib.save(new_image, file_name_image)
         # np.save(file_name_image, image.astype('float32'))
-        if max_val == 1:
-            dtype = 'bool'
-        else:
-            dtype = 'int8'
+        dtype = 'int8'
         new_annotation = nib.Nifti1Image(annotation.astype(dtype), affine=np.eye(4))
-        nib.save(new_annotation, file_name_annotation.replace('.npy','.nii.gz'))
+        nib.save(new_annotation, file_name_annotation)
         # np.save(file_name_annotation, annotation.astype(dtype))
     return None
 
@@ -249,8 +253,8 @@ def run_main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',d
     for t in threads:
         t.join()
 if __name__ == '__main__':
-    # path = r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Ablation_Zones\Numpy_Ablation_Zones'
+    # path = r'K:\Morfeus\BMAnderson\CNN\Data\Data_Pancreas\Pancreas\All_Imaging\UMPC_Patients\Nib_UMPC_Patients'
     # run_main(path=os.path.join(path,'CT'),
     #          pickle_path=os.path.join(path,'patient_info_Ablation_Zones.pkl'),
-    #          resample=True, desired_output_spacing=(None,None,2.5))
+    #          resample=False, desired_output_spacing=(None,None,2.5))
     xxx = 1
