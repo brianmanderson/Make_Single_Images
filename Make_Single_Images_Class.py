@@ -94,6 +94,7 @@ class Resample_Class(object):
         output_spacing = np.asarray(output_spacing)
         self.Resample.SetOutputSpacing(output_spacing)
         if is_annotation:
+            input_image = input_image.astype('int8')
             self.Resample.SetInterpolator(sitk.sitkNearestNeighbor)
         else:
             self.Resample.SetInterpolator(sitk.sitkLinear)
@@ -110,8 +111,6 @@ class Resample_Class(object):
         self.Resample.SetOutputOrigin(image.GetOrigin())
         output = self.Resample.Execute(image)
         output = sitk.GetArrayFromImage(output)
-        if is_annotation:
-            output[output>0] = 1
         return output
 
 def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, patient_info=dict(), resampler=None, desired_output_spacing=(None,None,2.5)):
@@ -196,25 +195,16 @@ def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, patie
                 temp_images = np.transpose(images[0,...],axes=(-1,0,1))
                 temp_annotations = np.transpose(annotation[0,...],axes=(-1,0,1,2))
                 input_spacing = (float(x_y_resolution), float(x_y_resolution), float(slice_thickness))
-                output_spacing = []
-                for index in range(3):
-                    if input_spacing[index] < desired_output_spacing[index]:
-                        output_spacing.append(desired_output_spacing[index])
-                    else:
-                        output_spacing.append(input_spacing[index])
-                output_spacing = tuple(output_spacing)
-                if output_spacing != input_spacing:
-                    print('Resampling to ' + str(output_spacing))
+                if desired_output_spacing != input_spacing:
+                    print('Resampling to ' + str(desired_output_spacing))
                     resized_images = resampler.resample_image(input_image=temp_images,input_spacing=input_spacing,
-                                                              output_spacing=output_spacing,is_annotation=False)
-                    resized_annotations = np.zeros(resized_images.shape + (annotation.shape[3],))
+                                                              output_spacing=desired_output_spacing,is_annotation=False)
+                    resized_annotations = np.zeros(resized_images.shape + (annotation.shape[3],),dtype=annotation.dtype)
                     for i in range(temp_annotations.shape[-1]):
                         resized_annotations[...,i] = resampler.resample_image(input_image=temp_annotations[...,i], input_spacing=input_spacing,
-                                                                              output_spacing=output_spacing)
+                                                                              output_spacing=desired_output_spacing)
                     images = np.transpose(resized_images,axes=(1,2,0))[None,...]
                     annotation = np.transpose(resized_annotations,axes=(1,2,3,0))[None,...]
-                # else:
-                #     print('Only downsampling, not upsampling')
 
         # Annotations should be up the shape [1, 512, 512, # classes, # images]
         max_vals = np.max(annotation,axis=(0,1,2,3))
