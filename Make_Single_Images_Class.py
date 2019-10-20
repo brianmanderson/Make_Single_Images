@@ -1,13 +1,63 @@
-import os, pickle
+import os, pickle, copy
 import numpy as np
 import SimpleITK as sitk
-if os.path.exists(r'K:\Morfeus'):
-    from TensorflowUtils import plot_scroll_Image, visualize, plt
 from threading import Thread
 from multiprocessing import cpu_count
 from queue import *
 import nibabel as nib
+import matplotlib.pyplot as plt
+from keras.utils import np_utils
 
+def plot_scroll_Image(x):
+    '''
+    :param x: input to view of form [rows, columns, # images]
+    :return:
+    '''
+    if x.dtype not in ['float32','float64']:
+        x = copy.deepcopy(x).astype('float32')
+    if len(x.shape) > 3:
+        x = np.squeeze(x)
+    if len(x.shape) == 3:
+        if x.shape[0] != x.shape[1]:
+            x = np.transpose(x,[1,2,0])
+        elif x.shape[0] == x.shape[2]:
+            x = np.transpose(x, [1, 2, 0])
+    fig, ax = plt.subplots(1, 1)
+    if len(x.shape) == 2:
+        x = np.expand_dims(x,axis=0)
+    tracker = IndexTracker(ax, x)
+    fig.canvas.mpl_connect('scroll_event', tracker.onscroll)
+    return fig,tracker
+    #Image is input in the form of [#images,512,512,#channels]
+
+class IndexTracker(object):
+    def __init__(self, ax, X):
+        self.ax = ax
+        ax.set_title('use scroll wheel to navigate images')
+
+        self.X = X
+        rows, cols, self.slices = X.shape
+        self.ind = np.where(self.X != 0)[-1]
+        if len(self.ind) > 0:
+            self.ind = self.ind[len(self.ind)//2]
+        else:
+            self.ind = self.slices//2
+
+        self.im = ax.imshow(self.X[:, :, self.ind],cmap='gray')
+        self.update()
+
+    def onscroll(self, event):
+        print("%s %s" % (event.button, event.step))
+        if event.button == 'up':
+            self.ind = (self.ind + 1) % self.slices
+        else:
+            self.ind = (self.ind - 1) % self.slices
+        self.update()
+
+    def update(self):
+        self.im.set_data(self.X[:, :, self.ind])
+        self.ax.set_ylabel('slice %s' % self.ind)
+        self.im.axes.figure.canvas.draw()
 
 def save_obj(path, obj): # Save almost anything.. dictionary, list, etc.
     if path.find('.pkl') == -1:
@@ -60,9 +110,11 @@ class Resample_Class(object):
         self.Resample.SetOutputOrigin(image.GetOrigin())
         output = self.Resample.Execute(image)
         output = sitk.GetArrayFromImage(output)
+        if is_annotation:
+            output[output>0] = 1
         return output
 
-def main(path,write_data=True, extension=999, q=None, re_write_pickle=True, patient_info=dict(), resampler=None, desired_output_spacing=(None,None,2.5)):
+def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, patient_info=dict(), resampler=None, desired_output_spacing=(None,None,2.5)):
     # Annotations should be up the shape [1, 512, 512, # classes, # images]
     if not write_data:
         print('Not writing out data')
@@ -125,15 +177,12 @@ def main(path,write_data=True, extension=999, q=None, re_write_pickle=True, pati
             annotation = annotation[None, ...]
             images = images[None, ...]
         annotation = annotation.astype('int')
-        if path.find('Liver_Segments') != -1:
-            for i in range(annotation.shape[-1]):
-                annotation[..., i] *= i
-            annotation = np.sum(annotation,axis=-1) # Flatten it down
         image_axis = images.shape[-1]
         annotation_axis = annotation.shape.index(image_axis)
         annotation = np.moveaxis(annotation,annotation_axis,-1)
         if annotation.shape[-2] == annotation.shape[-3]:
-            annotation = np.expand_dims(annotation,axis=-2)
+            annotation = np_utils.to_categorical(annotation,np.max(annotation)+1)
+            annotation = np.moveaxis(annotation, -1, -2)
 
         if resampler is not None:
             descriptions = desc.split('_')
@@ -148,15 +197,13 @@ def main(path,write_data=True, extension=999, q=None, re_write_pickle=True, pati
                 temp_annotations = np.transpose(annotation[0,...],axes=(-1,0,1,2))
                 input_spacing = (float(x_y_resolution), float(x_y_resolution), float(slice_thickness))
                 output_spacing = []
-                if desired_output_spacing[0] is None:
-                    output_spacing.append(float(x_y_resolution))
-                    output_spacing.append(float(x_y_resolution))
-                else:
-                    output_spacing.append(desired_output_spacing[0])
-                    output_spacing.append(desired_output_spacing[1])
-                output_spacing.append(desired_output_spacing[-1])
+                for index in range(3):
+                    if input_spacing[index] < desired_output_spacing[index]:
+                        output_spacing.append(desired_output_spacing[index])
+                    else:
+                        output_spacing.append(input_spacing[index])
                 output_spacing = tuple(output_spacing)
-                if output_spacing[-1] >= input_spacing[-1]:
+                if output_spacing != input_spacing:
                     print('Resampling to ' + str(output_spacing))
                     resized_images = resampler.resample_image(input_image=temp_images,input_spacing=input_spacing,
                                                               output_spacing=output_spacing,is_annotation=False)
@@ -219,8 +266,8 @@ def worker_def(q):
             objective(item)
             q.task_done()
 
-def run_main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',desired_output_spacing=(None,None,2.5),
-         extension=999,write_images=True,re_write_pickle=False, pickle_path=None, resample=False, resampler=None):
+def main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',desired_output_spacing=(None,None,2.5),
+         extension=999,write_images=True,re_write_pickle=False, pickle_path=None, resample=False):
     '''
     :param path: Path to parent folder that has a 'Test','Train', and 'Validation' folder
     :param pickle_file: path to 'patient_info' file
@@ -235,6 +282,7 @@ def run_main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',d
         patient_info = load_obj(pickle_path)
     thread_count = int(cpu_count()*.75-1)  # Leaves you one thread for doing things with
     # thread_count = 1
+    resampler = None
     if resample:
         resampler = Resample_Class()
     print('This is running on ' + str(thread_count) + ' threads')
@@ -246,7 +294,7 @@ def run_main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',d
         threads.append(t)
     for added_ext in ['']:
         for ext in ['Test','Train','Validation']:
-            main(write_data=write_images,path=os.path.join(path,ext+added_ext), extension=extension, q=q, re_write_pickle=re_write_pickle, patient_info=patient_info, resampler=resampler,
+            run(write_data=write_images,path=os.path.join(path,ext+added_ext), extension=extension, q=q, re_write_pickle=re_write_pickle, patient_info=patient_info, resampler=resampler,
                  desired_output_spacing=desired_output_spacing)
     for i in range(thread_count):
         q.put(None)
