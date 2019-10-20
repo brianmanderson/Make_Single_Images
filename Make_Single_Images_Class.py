@@ -252,8 +252,7 @@ def write_output(A):
         new_image = nib.Nifti1Image(image.astype('float32'), affine=np.eye(4))
         nib.save(new_image, file_name_image)
         # np.save(file_name_image, image.astype('float32'))
-        dtype = 'int8'
-        new_annotation = nib.Nifti1Image(annotation.astype(dtype), affine=np.eye(4))
+        new_annotation = nib.Nifti1Image(annotation.astype('float32'), affine=np.eye(4))
         nib.save(new_annotation, file_name_annotation)
         # np.save(file_name_annotation, annotation.astype(dtype))
     return None
