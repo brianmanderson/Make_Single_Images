@@ -195,14 +195,21 @@ def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, patie
                 temp_images = np.transpose(images[0,...],axes=(-1,0,1))
                 temp_annotations = np.transpose(annotation[0,...],axes=(-1,0,1,2))
                 input_spacing = (float(x_y_resolution), float(x_y_resolution), float(slice_thickness))
-                if desired_output_spacing != input_spacing:
-                    print('Resampling to ' + str(desired_output_spacing))
+                output_spacing = []
+                for index in range(3):
+                    if desired_output_spacing[index] is None:
+                        output_spacing.append(input_spacing[index])
+                    else:
+                        output_spacing.append(desired_output_spacing[index])
+                output_spacing = tuple(output_spacing)
+                if output_spacing != input_spacing:
+                    print('Resampling to ' + str(output_spacing))
                     resized_images = resampler.resample_image(input_image=temp_images,input_spacing=input_spacing,
-                                                              output_spacing=desired_output_spacing,is_annotation=False)
+                                                              output_spacing=output_spacing,is_annotation=False)
                     resized_annotations = np.zeros(resized_images.shape + (annotation.shape[3],),dtype=annotation.dtype)
                     for i in range(temp_annotations.shape[-1]):
                         resized_annotations[...,i] = resampler.resample_image(input_image=temp_annotations[...,i], input_spacing=input_spacing,
-                                                                              output_spacing=desired_output_spacing)
+                                                                              output_spacing=output_spacing)
                     images = np.transpose(resized_images,axes=(1,2,0))[None,...]
                     annotation = np.transpose(resized_annotations,axes=(1,2,3,0))[None,...]
 
