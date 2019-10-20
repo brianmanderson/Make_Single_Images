@@ -130,12 +130,12 @@ def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, patie
     status = 0
     total = len(files)/2
     out_dict = load_obj(os.path.join(path,out_path_name,'descriptions_start_and_stop.pkl'))
+    files = [i for i in files if i.find('Overall_Data') == -1 and i.find('instructions') == -1 and i.find('_mask') != -1]
     for file in files:
         ext = '.npy'
         if file.find(ext) == -1:
             ext = '.nii.gz'
-        if file.find('Overall_Data') == 0 or file.find('instructions') == 0 or file.find('_mask') == -1:
-            continue
+        print(file)
         pat_desc = (file.split('Overall_mask_')[1])
         if pat_desc.find('_y') != -1:
             pat_desc = pat_desc.split('_y')[0]
@@ -214,7 +214,10 @@ def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, patie
                     annotation = np.transpose(resized_annotations,axes=(1,2,3,0))[None,...]
 
         # Annotations should be up the shape [1, 512, 512, # classes, # images]
-        max_vals = np.max(annotation,axis=(0,1,2,3))
+        if annotation.shape[3] > 1:
+            max_vals = np.max(annotation[:,:,:,1:,...], axis=(0, 1, 2, 3))
+        else:
+            max_vals = np.max(annotation, axis=(0, 1, 2, 3))
         non_zero_values = np.where(max_vals != 0)[0]
         if not np.any(non_zero_values):
             print('Found nothing for ' + file)
@@ -222,9 +225,12 @@ def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, patie
         start = non_zero_values[0]
         stop = non_zero_values[-1]
         out_dict[desc] = {'start':start,'stop':stop}
-        for val in range(annotation.shape[-2]):
+        val_start = 0
+        if annotation.shape[3] > 1:
+            val_start = 1
+        for val in range(val_start,annotation.shape[-2]):
             slices = np.where(annotation[0,:,:,val,:] == 1)[-1]
-            out_dict[desc][val+1] = np.unique(slices)
+            out_dict[desc][val+1-val_start] = np.unique(slices)
         start_images = max([start - extension,0])
         stop_images = min([stop + extension,images.shape[-1]])
         if write_data:
@@ -233,7 +239,7 @@ def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, patie
                 # pool.map(write_output, ([desc, path, out_path_name, files_in_loc, i, images[:,:,:,i],annotation[:,:,:,i]] for i in range(start,stop)))
         print((status+1)/total * 100)
         status += 1
-    save_obj(os.path.join(path,out_path_name,'descriptions_start_and_stop.pkl'),out_dict)
+        save_obj(os.path.join(path,out_path_name,'descriptions_start_and_stop.pkl'),out_dict)
 
 
 def write_output(A):
@@ -290,7 +296,7 @@ def main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',desir
         t.start()
         threads.append(t)
     for added_ext in ['']:
-        for ext in ['Test','Train','Validation']:
+        for ext in ['Train', 'Validation','Test']:
             run(write_data=write_images,path=os.path.join(path,ext+added_ext), extension=extension, q=q, re_write_pickle=re_write_pickle, patient_info=patient_info, resampler=resampler,
                  desired_output_spacing=desired_output_spacing)
     for i in range(thread_count):
