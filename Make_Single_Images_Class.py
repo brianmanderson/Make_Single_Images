@@ -86,7 +86,7 @@ class Resample_Class(object):
     def resample_image(self,input_image, input_spacing=(0.975,0.975,2.5),output_spacing=(0.975,0.975,2.5),
                        is_annotation=False):
         '''
-        :param input_image: Image of the shape # images, rows, cols
+        :param input_image: Image of the shape # images, rows, cols, or sitk.Image
         :param spacing: Goes in the form of (row_dim, col_dim, z_dim) (I know it's confusing..)
         :param is_annotation: Whether to use Linear or NearestNeighbor, Nearest should be used for annotations
         :return:
@@ -94,13 +94,16 @@ class Resample_Class(object):
         output_spacing = np.asarray(output_spacing)
         self.Resample.SetOutputSpacing(output_spacing)
         if is_annotation:
-            input_image = input_image.astype('int8')
+            if type(input_image) is np.ndarray:
+                input_image = input_image.astype('int8')
             self.Resample.SetInterpolator(sitk.sitkNearestNeighbor)
         else:
             self.Resample.SetInterpolator(sitk.sitkLinear)
-
-        image = sitk.GetImageFromArray(input_image)
-        image.SetSpacing(input_spacing)
+        if type(input_image) is np.ndarray:
+            image = sitk.GetImageFromArray(input_image)
+            image.SetSpacing(input_spacing)
+        else:
+            image = input_image
         orig_size = np.array(image.GetSize(),dtype=np.int)
         orig_spacing = np.asarray(image.GetSpacing())
         new_size = orig_size * (orig_spacing / output_spacing)
@@ -110,7 +113,8 @@ class Resample_Class(object):
         self.Resample.SetOutputDirection(image.GetDirection())
         self.Resample.SetOutputOrigin(image.GetOrigin())
         output = self.Resample.Execute(image)
-        output = sitk.GetArrayFromImage(output)
+        if type(input_image) is np.ndarray:
+            output = sitk.GetArrayFromImage(output)
         return output
 
 def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, patient_info=dict(), resampler=None, desired_output_spacing=(None,None,2.5)):
@@ -157,63 +161,30 @@ def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, patie
                 break
         if found and not re_write_pickle and desc in out_dict: # if the desc isn't in the out dict, re-run it
             continue
-        if ext == '.npy':
-            annotation = np.load(os.path.join(path,file))
-        else:
-            annotation = nib.load(os.path.join(path,file)).get_fdata()
-        if path.find('LiTs') != -1:
-            if np.max(annotation) == 1:
-                return None
-        if ext == '.npy':
-            images = np.load(os.path.join(path,image_path))
-        else:
-            images = nib.load(os.path.join(path,image_path)).get_fdata()
-        if images.max() < 500:
-            print('Image intensities are odd..')
-        if path.find('Numpy_GTV_Ablation') != -1:
-            annotation[annotation>0]=1
-        if annotation.shape[0] != 1:
-            annotation = annotation[None, ...]
-            images = images[None, ...]
-        annotation = annotation.astype('int')
-        image_axis = images.shape[-1]
-        annotation_axis = annotation.shape.index(image_axis)
-        annotation = np.moveaxis(annotation,annotation_axis,-1)
-        if annotation.shape[-2] == annotation.shape[-3]:
-            annotation = np_utils.to_categorical(annotation,np.max(annotation)+1)
-            annotation = np.moveaxis(annotation, -1, -2)
-
+        annotation_handle = sitk.ReadImage(os.path.join(path,file))
+        # annotation = sitk.GetArrayFromImage(annotation_handle)
+        image_handle = sitk.ReadImage(os.path.join(path, image_path))
+        # images = sitk.GetArrayFromImage(image_handle)
+        # if path.find('Numpy_GTV_Ablation') != -1:
+        #     annotation[annotation>0]=1
         if resampler is not None:
-            descriptions = desc.split('_')
-            info = None
-            for i in range(len(descriptions)):
-                if descriptions[i] in patient_info:
-                    info = patient_info[descriptions[i]][descriptions[i + 1]].split(',')
-                    break
-            if info:
-                pat_id, slice_thickness, x_y_resolution = info
-                temp_images = np.transpose(images[0,...],axes=(-1,0,1))
-                temp_annotations = np.transpose(annotation[0,...],axes=(-1,0,1,2))
-                input_spacing = (float(x_y_resolution), float(x_y_resolution), float(slice_thickness))
-                output_spacing = []
-                for index in range(3):
-                    if desired_output_spacing[index] is None:
-                        output_spacing.append(input_spacing[index])
-                    else:
-                        output_spacing.append(desired_output_spacing[index])
-                output_spacing = tuple(output_spacing)
-                if output_spacing != input_spacing:
-                    print('Resampling to ' + str(output_spacing))
-                    resized_images = resampler.resample_image(input_image=temp_images,input_spacing=input_spacing,
-                                                              output_spacing=output_spacing,is_annotation=False)
-                    resized_annotations = np.zeros(resized_images.shape + (annotation.shape[3],),dtype=annotation.dtype)
-                    for i in range(temp_annotations.shape[-1]):
-                        resized_annotations[...,i] = resampler.resample_image(input_image=temp_annotations[...,i], input_spacing=input_spacing,
-                                                                              output_spacing=output_spacing)
-                    images = np.transpose(resized_images,axes=(1,2,0))[None,...]
-                    annotation = np.transpose(resized_annotations,axes=(1,2,3,0))[None,...]
-
+            input_spacing = image_handle.GetSpacing()
+            output_spacing = []
+            for index in range(3):
+                if desired_output_spacing[index] is None:
+                    output_spacing.append(input_spacing[index])
+                else:
+                    output_spacing.append(desired_output_spacing[index])
+            output_spacing = tuple(output_spacing)
+            if output_spacing != input_spacing:
+                print('Resampling to ' + str(output_spacing))
+                image_handle = resampler.resample_image(input_image=image_handle,input_spacing=input_spacing,
+                                                          output_spacing=output_spacing,is_annotation=False)
+                annotation_handle = resampler.resample_image(input_image=annotation_handle,input_spacing=input_spacing,
+                                                          output_spacing=output_spacing,is_annotation=True)
         # Annotations should be up the shape [1, 512, 512, # classes, # images]
+        annotation = sitk.GetArrayFromImage(annotation_handle)
+        annotation = np.transpose(np_utils.to_categorical(annotation,np.max(annotation)+1),axes=(1,2,3,0))[None,...]
         if annotation.shape[3] > 1:
             max_vals = np.max(annotation[:,:,:,1:,...], axis=(0, 1, 2, 3))
         else:
@@ -232,10 +203,10 @@ def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, patie
             slices = np.where(annotation[0,:,:,val,:] == 1)[-1]
             out_dict[desc][val+1-val_start] = np.unique(slices)
         start_images = max([start - extension,0])
-        stop_images = min([stop + extension,images.shape[-1]])
+        stop_images = min([stop + extension,annotation.shape[-1]])
         if write_data:
             for i in range(start_images,stop_images):
-                q.put([desc, path, out_path_name, files_in_loc, i, images[...,i],annotation[...,i], np.max(max_vals)])
+                q.put([desc, path, out_path_name, files_in_loc, i, image_handle[:,:,i],annotation_handle[:,:,i]])
                 # pool.map(write_output, ([desc, path, out_path_name, files_in_loc, i, images[:,:,:,i],annotation[:,:,:,i]] for i in range(start,stop)))
         print((status+1)/total * 100)
         status += 1
@@ -243,18 +214,14 @@ def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, patie
 
 
 def write_output(A):
-    desc, path, out_path_name, files_in_loc, i, image, annotation, max_val = A
+    desc, path, out_path_name, files_in_loc, i, image, annotation = A
     file_name_image = desc + '_' + str(i) + '_image.nii.gz'
     file_name_annotation = file_name_image.replace('_image.nii.gz', '_annotation.nii.gz')
     file_name_image = os.path.join(path, out_path_name, file_name_image)
     file_name_annotation = os.path.join(path, out_path_name, file_name_annotation)
     if file_name_image not in files_in_loc or file_name_annotation not in files_in_loc:
-        new_image = nib.Nifti1Image(image.astype('float32'), affine=np.eye(4))
-        nib.save(new_image, file_name_image)
-        # np.save(file_name_image, image.astype('float32'))
-        new_annotation = nib.Nifti1Image(annotation.astype('float32'), affine=np.eye(4))
-        nib.save(new_annotation, file_name_annotation)
-        # np.save(file_name_annotation, annotation.astype(dtype))
+        sitk.WriteImage(image,file_name_image)
+        sitk.WriteImage(annotation, file_name_annotation)
     return None
 
 
@@ -295,7 +262,7 @@ def main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',desir
         t.start()
         threads.append(t)
     for added_ext in ['']:
-        for ext in ['Train', 'Validation','Test']:
+        for ext in ['Train','Test', 'Validation']:
             run(write_data=write_images,path=os.path.join(path,ext+added_ext), extension=extension, q=q, re_write_pickle=re_write_pickle, patient_info=patient_info, resampler=resampler,
                  desired_output_spacing=desired_output_spacing)
     for i in range(thread_count):
