@@ -184,24 +184,18 @@ def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, patie
                                                           output_spacing=output_spacing,is_annotation=True)
         # Annotations should be up the shape [1, 512, 512, # classes, # images]
         annotation = sitk.GetArrayFromImage(annotation_handle)
-        annotation = np.transpose(np_utils.to_categorical(annotation,np.max(annotation)+1),axes=(1,2,3,0))[None,...]
-        if annotation.shape[3] > 1:
-            max_vals = np.max(annotation[:,:,:,1:,...], axis=(0, 1, 2, 3))
-        else:
-            max_vals = np.max(annotation, axis=(0, 1, 2, 3))
-        non_zero_values = np.where(max_vals != 0)[0]
+        non_zero_values = np.where(annotation>0)[0]
         if not np.any(non_zero_values):
             print('Found nothing for ' + file)
             continue
         start = non_zero_values[0]
         stop = non_zero_values[-1]
         out_dict[desc] = {'start':start,'stop':stop}
-        val_start = 0
-        if annotation.shape[3] > 1:
-            val_start = 1
-        for val in range(val_start,annotation.shape[-2]):
-            slices = np.where(annotation[0,:,:,val,:] == 1)[-1]
-            out_dict[desc][val+1-val_start] = np.unique(slices)
+        for val in range(1,np.max(annotation)+1):
+            slices = np.where(annotation == val)
+            if slices:
+                slices = slices[0]
+                out_dict[desc][val] = np.unique(slices)
         start_images = max([start - extension,0])
         stop_images = min([stop + extension,annotation.shape[-1]])
         if write_data:
@@ -236,21 +230,20 @@ def worker_def(q):
             q.task_done()
 
 def main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',desired_output_spacing=(None,None,2.5),
-         extension=999,write_images=True,re_write_pickle=False, pickle_path=None, resample=False):
+         extension=999,write_images=True,re_write_pickle=False, pickle_path=None, resample=False,
+         thread_count = int(cpu_count()*.75-1)):
     '''
     :param path: Path to parent folder that has a 'Test','Train', and 'Validation' folder
     :param pickle_file: path to 'patient_info' file
     :param extension: How many images do you want above and below your segmentations
     :param write_images: Write out the images?
     :param re_write_pickle: re-write the pickle file? If true, will require loading images again
-    :param desired_output_spacing: desired spacing of output images in mm (dx, dy, dz), None will not change
+    :param desired_output_spacing: desired spacing of output images in mm (dy, dx, dz), None will not change
     :return:
     '''
     patient_info = dict()
     if pickle_path:
         patient_info = load_obj(pickle_path)
-    thread_count = int(cpu_count()*.75-1)  # Leaves you one thread for doing things with
-    # thread_count = 1
     resampler = None
     if resample:
         resampler = Resample_Class()
