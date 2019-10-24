@@ -197,7 +197,7 @@ def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, patie
                 slices = slices[0]
                 out_dict[desc][val] = np.unique(slices)
         start_images = max([start - extension,0])
-        stop_images = min([stop + extension,annotation.shape[-1]])
+        stop_images = min([stop + extension,annotation.shape[0]])
         if write_data:
             for i in range(start_images,stop_images):
                 q.put([desc, path, out_path_name, files_in_loc, i, image_handle[:,:,i],annotation_handle[:,:,i]])
