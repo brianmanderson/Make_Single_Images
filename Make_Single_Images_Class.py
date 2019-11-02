@@ -7,7 +7,7 @@ from queue import *
 import nibabel as nib
 import matplotlib.pyplot as plt
 from keras.utils import np_utils
-from Resample_Class import Resample_Class
+from Resample_Class.Resample_Class import Resample_Class
 
 def plot_scroll_Image(x):
     '''
