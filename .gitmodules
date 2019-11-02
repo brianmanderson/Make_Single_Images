@@ -1,0 +1,3 @@
+[submodule "Resample_Class"]
+	path = Resample_Class
+	url = https://github.com/brianmanderson/Resample_Class.git

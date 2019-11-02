@@ -7,6 +7,7 @@ from queue import *
 import nibabel as nib
 import matplotlib.pyplot as plt
 from keras.utils import np_utils
+from Resample_Class import Resample_Class
 
 def plot_scroll_Image(x):
     '''
@@ -77,45 +78,6 @@ def load_obj(path):
         out = {}
         return out
 
-class Resample_Class(object):
-    '''
-    Feed in images in form of #images, rows, cols
-    '''
-    def __init__(self):
-        self.Resample = sitk.ResampleImageFilter()
-    def resample_image(self,input_image, input_spacing=(0.975,0.975,2.5),output_spacing=(0.975,0.975,2.5),
-                       is_annotation=False):
-        '''
-        :param input_image: Image of the shape # images, rows, cols, or sitk.Image
-        :param spacing: Goes in the form of (row_dim, col_dim, z_dim) (I know it's confusing..)
-        :param is_annotation: Whether to use Linear or NearestNeighbor, Nearest should be used for annotations
-        :return:
-        '''
-        output_spacing = np.asarray(output_spacing)
-        self.Resample.SetOutputSpacing(output_spacing)
-        if is_annotation:
-            if type(input_image) is np.ndarray:
-                input_image = input_image.astype('int8')
-            self.Resample.SetInterpolator(sitk.sitkNearestNeighbor)
-        else:
-            self.Resample.SetInterpolator(sitk.sitkLinear)
-        if type(input_image) is np.ndarray:
-            image = sitk.GetImageFromArray(input_image)
-            image.SetSpacing(input_spacing)
-        else:
-            image = input_image
-        orig_size = np.array(image.GetSize(),dtype=np.int)
-        orig_spacing = np.asarray(image.GetSpacing())
-        new_size = orig_size * (orig_spacing / output_spacing)
-        new_size = np.ceil(new_size).astype(np.int)  # Image dimensions are in integers
-        new_size = [np.int(i) for i in new_size]
-        self.Resample.SetSize(new_size)
-        self.Resample.SetOutputDirection(image.GetDirection())
-        self.Resample.SetOutputOrigin(image.GetOrigin())
-        output = self.Resample.Execute(image)
-        if type(input_image) is np.ndarray:
-            output = sitk.GetArrayFromImage(output)
-        return output
 
 def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, patient_info=dict(), resampler=None, desired_output_spacing=(None,None,2.5)):
     # Annotations should be up the shape [1, 512, 512, # classes, # images]
