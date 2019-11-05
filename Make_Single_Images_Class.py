@@ -64,7 +64,7 @@ def save_obj(path, obj): # Save almost anything.. dictionary, list, etc.
     if path.find('.pkl') == -1:
         path += '.pkl'
     with open(path, 'wb') as f:
-        pickle.dump(obj, f, pickle.DEFAULT_PROTOCOL)
+        pickle.dump(obj, f, 3)
     return None
 
 
