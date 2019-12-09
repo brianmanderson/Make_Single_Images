@@ -79,7 +79,7 @@ def load_obj(path):
         return out
 
 
-def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, patient_info=dict(), resampler=None, desired_output_spacing=(None,None,2.5)):
+def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, resampler=None, desired_output_spacing=(None,None,2.5)):
     # Annotations should be up the shape [1, 512, 512, # classes, # images]
     if not write_data:
         print('Not writing out data')
@@ -192,7 +192,7 @@ def worker_def(q):
             q.task_done()
 
 def main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',desired_output_spacing=(None,None,None),
-         extension=999,write_images=True,re_write_pickle=False, pickle_path=None, thread_count = int(cpu_count()*.75-1)):
+         extension=999,write_images=True,re_write_pickle=False, thread_count = int(cpu_count()*.75-1)):
     '''
     :param path: Path to parent folder that has a 'Test','Train', and 'Validation' folder
     :param pickle_file: path to 'patient_info' file
@@ -202,9 +202,6 @@ def main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',desir
     :param desired_output_spacing: desired spacing of output images in mm (dy, dx, dz), (0.975, 0.975, 2.5) None will not change
     :return:
     '''
-    patient_info = dict()
-    if pickle_path:
-        patient_info = load_obj(pickle_path)
     resampler = None
     for sample in desired_output_spacing:
         if sample is not None:
@@ -219,7 +216,7 @@ def main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',desir
         threads.append(t)
     for added_ext in ['']:
         for ext in ['Train','Test', 'Validation']:
-            run(write_data=write_images,path=os.path.join(path,ext+added_ext), extension=extension, q=q, re_write_pickle=re_write_pickle, patient_info=patient_info, resampler=resampler,
+            run(write_data=write_images,path=os.path.join(path,ext+added_ext), extension=extension, q=q, re_write_pickle=re_write_pickle,resampler=resampler,
                  desired_output_spacing=desired_output_spacing)
     for i in range(thread_count):
         q.put(None)
