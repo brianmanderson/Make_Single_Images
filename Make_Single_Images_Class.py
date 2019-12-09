@@ -7,7 +7,7 @@ from queue import *
 import nibabel as nib
 import matplotlib.pyplot as plt
 from keras.utils import np_utils
-from Resample_Class.Resample_Class import Resample_Class
+from Resample_Class.Resampling_Utils import Resample_Class_Object
 
 def plot_scroll_Image(x):
     '''
@@ -208,7 +208,7 @@ def main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',desir
         patient_info = load_obj(pickle_path)
     resampler = None
     if resample:
-        resampler = Resample_Class()
+        resampler = Resample_Class_Object()
     print('This is running on ' + str(thread_count) + ' threads')
     q = Queue(maxsize=thread_count)
     threads = []
