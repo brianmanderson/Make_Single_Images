@@ -191,24 +191,25 @@ def worker_def(q):
             objective(item)
             q.task_done()
 
-def main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',desired_output_spacing=(None,None,2.5),
-         extension=999,write_images=True,re_write_pickle=False, pickle_path=None, resample=False,
-         thread_count = int(cpu_count()*.75-1)):
+def main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',desired_output_spacing=(None,None,None),
+         extension=999,write_images=True,re_write_pickle=False, pickle_path=None, thread_count = int(cpu_count()*.75-1)):
     '''
     :param path: Path to parent folder that has a 'Test','Train', and 'Validation' folder
     :param pickle_file: path to 'patient_info' file
     :param extension: How many images do you want above and below your segmentations
     :param write_images: Write out the images?
     :param re_write_pickle: re-write the pickle file? If true, will require loading images again
-    :param desired_output_spacing: desired spacing of output images in mm (dy, dx, dz), None will not change
+    :param desired_output_spacing: desired spacing of output images in mm (dy, dx, dz), (0.975, 0.975, 2.5) None will not change
     :return:
     '''
     patient_info = dict()
     if pickle_path:
         patient_info = load_obj(pickle_path)
     resampler = None
-    if resample:
-        resampler = Resample_Class_Object()
+    for sample in desired_output_spacing:
+        if sample is not None:
+            resampler = Resample_Class_Object()
+            break
     print('This is running on ' + str(thread_count) + ' threads')
     q = Queue(maxsize=thread_count)
     threads = []
