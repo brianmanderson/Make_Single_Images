@@ -94,8 +94,8 @@ def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, resam
                                                           output_spacing=output_spacing,is_annotation=False)
                 annotation_handle = resampler.resample_image(input_image=annotation_handle,input_spacing=input_spacing,
                                                           output_spacing=output_spacing,is_annotation=True)
-        # Annotations should be up the shape [1, 512, 512, # classes, # images]
         annotation = sitk.GetArrayFromImage(annotation_handle)
+        # Annotation should be of shape [# images, rows, cols]
         non_zero_values = np.where(annotation>0)[0]
         if not np.any(non_zero_values):
             print('Found nothing for ' + file)
