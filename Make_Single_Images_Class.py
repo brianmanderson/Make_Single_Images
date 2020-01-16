@@ -89,7 +89,7 @@ def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, resam
                     output_spacing.append(desired_output_spacing[index])
             output_spacing = tuple(output_spacing)
             if output_spacing != input_spacing:
-                print('Resampling to ' + str(output_spacing))
+                print('Resampling {} to {}'.format(input_spacing,output_spacing))
                 image_handle = resampler.resample_image(input_image=image_handle,input_spacing=input_spacing,
                                                           output_spacing=output_spacing,is_annotation=False)
                 annotation_handle = resampler.resample_image(input_image=annotation_handle,input_spacing=input_spacing,
