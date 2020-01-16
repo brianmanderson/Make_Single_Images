@@ -141,8 +141,8 @@ def worker_def(q):
             objective(item)
             q.task_done()
 
-def main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',desired_output_spacing=(None,None,None),
-         extension=999,write_images=True,re_write_pickle=False, thread_count = int(cpu_count()*.75-1)):
+def run_main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',desired_output_spacing=(None,None,None),
+             extension=999,write_images=True,re_write_pickle=False, thread_count = int(cpu_count()*.75-1)):
     '''
     :param path: Path to parent folder that has a 'Test','Train', and 'Validation' folder
     :param pickle_file: path to 'patient_info' file
