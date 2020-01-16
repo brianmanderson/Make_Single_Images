@@ -5,9 +5,7 @@ import SimpleITK as sitk
 from threading import Thread
 from multiprocessing import cpu_count
 from queue import *
-import nibabel as nib
 import matplotlib.pyplot as plt
-from keras.utils import np_utils
 from Resample_Class.Resampling_Utils import Resample_Class_Object
 
 def plot_scroll_Image(x):
