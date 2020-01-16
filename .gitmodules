@@ -1,3 +1,6 @@
 [submodule "Resample_Class"]
 	path = Resample_Class
 	url = https://github.com/brianmanderson/Resample_Class.git
+[submodule "Plot_And_Scroll_Images"]
+	path = Plot_And_Scroll_Images
+	url = https://github.com/brianmanderson/Plot_And_Scroll_Images.git
