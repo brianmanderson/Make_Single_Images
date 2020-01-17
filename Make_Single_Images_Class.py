@@ -97,6 +97,9 @@ def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, resam
         pixel_id = annotation_handle.GetPixelIDTypeAsString()
         if pixel_id.find('int') == -1:
             annotation_handle = sitk.Cast(annotation_handle, sitk.sitkUInt8)
+        pixel_id = image_handle.GetPixelIDTypeAsString()
+        if pixel_id.find('32-bit signed integer') != 0:
+            image_handle = sitk.Cast(annotation_handle, sitk.sitkFloat32)
         annotation = sitk.GetArrayFromImage(annotation_handle)
         # Annotation should be of shape [# images, rows, cols]
         non_zero_values = np.where(annotation>0)[0]
