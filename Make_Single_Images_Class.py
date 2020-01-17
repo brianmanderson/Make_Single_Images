@@ -94,6 +94,9 @@ def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, resam
                                                           output_spacing=output_spacing,is_annotation=False)
                 annotation_handle = resampler.resample_image(input_image=annotation_handle,input_spacing=input_spacing,
                                                           output_spacing=output_spacing,is_annotation=True)
+        pixel_id = annotation_handle.GetPixelIDTypeAsString()
+        if pixel_id.find('int') == -1:
+            annotation_handle = sitk.Cast(annotation_handle, sitk.sitkUInt8)
         annotation = sitk.GetArrayFromImage(annotation_handle)
         # Annotation should be of shape [# images, rows, cols]
         non_zero_values = np.where(annotation>0)[0]
