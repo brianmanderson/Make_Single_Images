@@ -1,12 +1,11 @@
 import os, pickle, copy, sys
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 import SimpleITK as sitk
 from threading import Thread
 from multiprocessing import cpu_count
 from queue import *
 import matplotlib.pyplot as plt
-from Resample_Class.Resample_Class import Resample_Class_Object
+from .Resample_Class.Resample_Class import Resample_Class_Object
 from Plot_And_Scroll_Images.Plot_Scroll_Images import plot_scroll_Image
 
 
