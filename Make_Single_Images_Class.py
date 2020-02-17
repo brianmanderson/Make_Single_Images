@@ -28,11 +28,12 @@ def load_obj(path):
         return out
 
 
-def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, resampler=None, desired_output_spacing=(None,None,2.5)):
+def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, resampler=None,
+        desired_output_spacing=(None,None,2.5), file_ext=''):
     # Annotations should be up the shape [1, 512, 512, # classes, # images]
     if not write_data:
         print('Not writing out data')
-    out_path_name = 'Single_Images3D'
+    out_path_name = 'Single_Images3D' + file_ext
     files = []
     dirs = []
     for root, dirs, files in os.walk(path):
@@ -147,7 +148,7 @@ def worker_def(q):
             q.task_done()
 
 def run_main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',desired_output_spacing=(None,None,None),
-             extension=999,write_images=True,re_write_pickle=False, thread_count = int(cpu_count()*.75-1)):
+             extension=999,write_images=True,re_write_pickle=False, thread_count = int(cpu_count()*.75-1), file_ext=''):
     '''
     :param path: Path to parent folder that has a 'Test','Train', and 'Validation' folder
     :param pickle_file: path to 'patient_info' file
@@ -172,7 +173,7 @@ def run_main(path= r'K:\Morfeus\BMAnderson\CNN\Data\Data_Liver\Liver_Segments',d
     for added_ext in ['']:
         for ext in ['Train','Test', 'Validation']:
             run(write_data=write_images,path=os.path.join(path,ext+added_ext), extension=extension, q=q, re_write_pickle=re_write_pickle,resampler=resampler,
-                 desired_output_spacing=desired_output_spacing)
+                 desired_output_spacing=desired_output_spacing, file_ext = file_ext)
     for i in range(thread_count):
         q.put(None)
     for t in threads:
