@@ -30,6 +30,9 @@ def load_obj(path):
 
 def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, resampler=None, desired_output_spacing=(None,None,2.5)):
     # Annotations should be up the shape [1, 512, 512, # classes, # images]
+    if not os.path.exists(path):
+        print('\n\n\n{} does not exist!\n\n\n'.format(path))
+        return None
     if not write_data:
         print('Not writing out data')
     out_path_name = 'Single_Images3D'
