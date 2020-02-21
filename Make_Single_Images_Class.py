@@ -6,7 +6,7 @@ from multiprocessing import cpu_count
 from queue import *
 import matplotlib.pyplot as plt
 from .Resample_Class.Resample_Class import Resample_Class_Object
-from Plot_And_Scroll_Images.Plot_Scroll_Images import plot_scroll_Image
+from .Plot_And_Scroll_Images.Plot_Scroll_Images import plot_scroll_Image
 
 
 def save_obj(path, obj): # Save almost anything.. dictionary, list, etc.
