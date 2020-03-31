@@ -5,8 +5,8 @@ from threading import Thread
 from multiprocessing import cpu_count
 from queue import *
 import matplotlib.pyplot as plt
-from .Resample_Class.Resample_Class import Resample_Class_Object
-from .Plot_And_Scroll_Images.Plot_Scroll_Images import plot_scroll_Image
+from Resample_Class.Resample_Class import Resample_Class_Object
+from Plot_And_Scroll_Images.Plot_Scroll_Images import plot_scroll_Image
 
 
 def save_obj(path, obj): # Save almost anything.. dictionary, list, etc.
@@ -111,7 +111,7 @@ def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, resam
             continue
         start = non_zero_values[0]
         stop = non_zero_values[-1]
-        out_dict[desc] = {'start':start,'stop':stop}
+        out_dict[desc] = {'start':start,'stop':stop,'spacing':annotation_handle.GetSpacing()}
         for val in range(1,np.max(annotation)+1):
             slices = np.where(annotation == val)
             if slices:
