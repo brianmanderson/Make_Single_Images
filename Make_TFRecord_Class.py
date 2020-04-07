@@ -4,12 +4,31 @@ __author__ = 'Brian M Anderson'
 import tensorflow as tf
 import SimpleITK as sitk
 import numpy as np
-import os, sys
+import os, pickle
 from .Plot_And_Scroll_Images.Plot_Scroll_Images import plot_scroll_Image
 from _collections import OrderedDict
 from threading import Thread
 from multiprocessing import cpu_count
 from queue import *
+
+
+def save_obj(path, obj): # Save almost anything.. dictionary, list, etc.
+    if path.find('.pkl') == -1:
+        path += '.pkl'
+    with open(path, 'wb') as f:
+        pickle.dump(obj, f)
+    return None
+
+
+def load_obj(path):
+    if path.find('.pkl') == -1:
+        path += '.pkl'
+    if os.path.exists(path):
+        with open(path, 'rb') as f:
+            return pickle.load(f)
+    else:
+        out = {}
+        return out
 
 
 def _bytes_feature(value):
@@ -170,6 +189,8 @@ def write_tf_record(path=r'D:\Liver_Work\Train',rewrite=False, thread_count=int(
     for image_path in overall_dict.keys():
         writer.write(overall_dict[image_path])
     writer.close()
+    features = return_image_feature_description(wanted_values_for_bboxes)
+    save_obj(filename.replace('.tfrecord','_features.pkl'),features)
     return None
 
 
