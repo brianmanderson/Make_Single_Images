@@ -111,14 +111,22 @@ def run(path,write_data=True, extension=999, q=None, re_write_pickle=True, resam
             continue
         start = non_zero_values[0]
         stop = non_zero_values[-1]
+        start_images = max([start - extension,0])
+        stop_images = min([stop + extension,annotation.shape[0]])
+        if start_images != 0 or stop_images != annotation.shape[0]:
+            annotation = annotation[stop_images:stop_images,...]
+            non_zero_values = np.where(annotation > 0)[0]
+            if not np.any(non_zero_values):
+                print('Found nothing for ' + file)
+                continue
+            start = non_zero_values[0]
+            stop = non_zero_values[-1]
         out_dict[desc] = {'start':start,'stop':stop,'spacing':annotation_handle.GetSpacing()}
         for val in range(1,np.max(annotation)+1):
             slices = np.where(annotation == val)
             if slices:
                 slices = slices[0]
                 out_dict[desc][val] = np.unique(slices)
-        start_images = max([start - extension,0])
-        stop_images = min([stop + extension,annotation.shape[0]])
         if write_data:
             for i in range(start_images,stop_images):
                 q.put([desc, path, out_path_name, files_in_loc, i, image_handle[:,:,i],annotation_handle[:,:,i]])
