@@ -5,8 +5,7 @@ import tensorflow as tf
 import SimpleITK as sitk
 import numpy as np
 import os, sys
-sys.path.append('.')
-from Plot_And_Scroll_Images.Plot_Scroll_Images import plot_scroll_Image
+from .Plot_And_Scroll_Images.Plot_Scroll_Images import plot_scroll_Image
 from _collections import OrderedDict
 from threading import Thread
 from multiprocessing import cpu_count
