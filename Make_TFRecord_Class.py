@@ -69,9 +69,27 @@ def get_bounding_boxes(annotation_handle,value):
     thresholded_image = sitk.BinaryThreshold(annotation_handle,lowerThreshold=value,upperThreshold=value+1)
     connected_image = Connected_Component_Filter.Execute(thresholded_image)
     stats.Execute(connected_image)
-    bounding_boxes = np.asarray([stats.GetBoundingBox(l) for l in stats.GetLabels()])
-    volumes = np.asarray([stats.GetPhysicalSize(l) for l in stats.GetLabels()])
+    bounding_boxes = np.asarray([stats.GetBoundingBox(l) for l in stats.GetLabels()]).astype('int32')
+    volumes = np.asarray([stats.GetPhysicalSize(l) for l in stats.GetLabels()]).astype('float32')
     return bounding_boxes, volumes
+
+
+def return_image_feature_description(wanted_values_for_bboxes=None):
+    image_feature_description = {
+        'image': tf.io.FixedLenFeature([], tf.string),
+        'annotation': tf.io.FixedLenFeature([], tf.string),
+        'start': tf.io.FixedLenFeature([], tf.int64),
+        'stop': tf.io.FixedLenFeature([], tf.int64),
+        'z_images': tf.io.FixedLenFeature([], tf.int64),
+        'rows': tf.io.FixedLenFeature([], tf.int64),
+        'cols': tf.io.FixedLenFeature([], tf.int64),
+        'spacing': tf.io.FixedLenFeature([], tf.string)
+    }
+    if wanted_values_for_bboxes is not None:
+        for val in wanted_values_for_bboxes:
+            image_feature_description['bounding_boxes_{}'.format(val)] = tf.io.FixedLenFeature([], tf.string)
+            image_feature_description['volumes_{}'.format(val)] = tf.io.FixedLenFeature([], tf.string)
+    return image_feature_description
 
 
 def get_features(image_path, annotation_path, extension=np.inf, wanted_values_for_bboxes=None):
@@ -96,8 +114,8 @@ def get_features(image_path, annotation_path, extension=np.inf, wanted_values_fo
         start = non_zero_values[0]
         stop = non_zero_values[-1]
     z_images, rows, cols = annotation.shape
-    features['image'] = image
-    features['annotation'] = annotation
+    features['image'] = image[...,None]
+    features['annotation'] = annotation[...,None]
     features['start'] = start
     features['stop'] = stop
     features['z_images'] = z_images
@@ -115,24 +133,6 @@ def get_features(image_path, annotation_path, extension=np.inf, wanted_values_fo
     return features
 
 
-def return_image_feature_description(wanted_values_for_bboxes=None):
-    image_feature_description = {
-        'image': tf.io.FixedLenFeature([], tf.string),
-        'annotation': tf.io.FixedLenFeature([], tf.string),
-        'start': tf.io.FixedLenFeature([], tf.int64),
-        'stop': tf.io.FixedLenFeature([], tf.int64),
-        'z_images': tf.io.FixedLenFeature([], tf.int64),
-        'rows': tf.io.FixedLenFeature([], tf.int64),
-        'cols': tf.io.FixedLenFeature([], tf.int64),
-        'spacing': tf.io.FixedLenFeature([], tf.string)
-    }
-    if wanted_values_for_bboxes is not None:
-        for val in wanted_values_for_bboxes:
-            image_feature_description['bounding_boxes_{}'.format(val)] = tf.io.FixedLenFeature([], tf.string)
-            image_feature_description['volumes_{}'.format(val)] = tf.io.FixedLenFeature([], tf.string)
-    return image_feature_description
-
-
 def worker_def(A):
     q = A[0]
     base_class = serialize_example
@@ -148,7 +148,7 @@ def worker_def(A):
             q.task_done()
 
 
-def write_tf_record(path=r'D:\Liver_Work\Train',rewrite=False, thread_count=int(cpu_count() * .7 - 1),
+def write_tf_record(path=r'D:\Liver_Work\Train',rewrite=False, thread_count=int(cpu_count() * .9 - 1),
                     wanted_values_for_bboxes=None, record_name='Train.tfrecord', extension=np.inf):
     '''
     '''
@@ -173,7 +173,6 @@ def write_tf_record(path=r'D:\Liver_Work\Train',rewrite=False, thread_count=int(
         t = Thread(target=worker_def, args=(A,))
         t.start()
         threads.append(t)
-
     for iteration in data_dict['Images'].keys():
         print(iteration)
         image_path, annotation_path = data_dict['Images'][iteration], data_dict['Annotations'][iteration]
@@ -184,13 +183,14 @@ def write_tf_record(path=r'D:\Liver_Work\Train',rewrite=False, thread_count=int(
         q.put(None)
     for t in threads:
         t.join()
-    print('Finished! Writing record...')
+    print('Writing record...')
     writer = tf.io.TFRecordWriter(filename)
     for image_path in overall_dict.keys():
         writer.write(overall_dict[image_path])
     writer.close()
     features = return_image_feature_description(wanted_values_for_bboxes)
     save_obj(filename.replace('.tfrecord','_features.pkl'),features)
+    print('Finished!')
     return None
 
 
