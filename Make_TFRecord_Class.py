@@ -49,29 +49,28 @@ def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
 
+def return_example_proto(base_dictionary):
+    feature = {}
+    for key in base_dictionary:
+        data = base_dictionary[key]
+        if type(data) is int:
+            feature[key] = _int64_feature(data)
+        elif type(data) is np.ndarray:
+            feature[key] = _bytes_feature(data.tostring())
+    example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
+    return example_proto
+
+
 def serialize_example(image_path, annotation_path, overall_dict={}, wanted_values_for_bboxes=None, extension=np.inf,
                       is_3D=True):
-    feature = {}
     base_dictionary = get_features(image_path,annotation_path,extension=extension,
                                    wanted_values_for_bboxes=wanted_values_for_bboxes, is_3D=is_3D)
     if is_3D:
-        for key in base_dictionary:
-            data = base_dictionary[key]
-            if type(data) is int:
-                feature[key] = _int64_feature(data)
-            elif type(data) is np.ndarray:
-                feature[key] = _bytes_feature(data.tostring())
-        example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
+        example_proto = return_example_proto(base_dictionary)
         overall_dict[image_path] = example_proto.SerializeToString()
     else:
         for image_key in base_dictionary:
-            for key in base_dictionary[image_key]:
-                data = base_dictionary[image_key][key]
-                if type(data) is int:
-                    feature[key] = _int64_feature(data)
-                elif type(data) is np.ndarray:
-                    feature[key] = _bytes_feature(data.tostring())
-            example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
+            example_proto = return_example_proto(base_dictionary[image_key])
             overall_dict['{}_{}'.format(image_path,image_key)] = example_proto.SerializeToString()
 
 
@@ -132,9 +131,10 @@ def get_features(image_path, annotation_path, extension=np.inf, wanted_values_fo
         non_zero_values = np.where(annotation > 0)[0]
         if not np.any(non_zero_values):
             print('Found nothing for ' + image_path)
-        start = non_zero_values[0]
-        stop = non_zero_values[-1]
+        start = int(non_zero_values[0])
+        stop = int(non_zero_values[-1])
     z_images, rows, cols = annotation.shape
+    image, annotation = image.astype('float32'), annotation.astype('int8')
     if is_3D:
         features['image'] = image
         features['annotation'] = annotation
@@ -178,6 +178,18 @@ def worker_def(A):
             q.task_done()
 
 
+def return_parse_function(image_feature_description):
+
+    def _parse_image_function(example_proto):
+        return tf.io.parse_single_example(example_proto, image_feature_description)
+    return _parse_image_function
+
+
+def read_dataset(filename, features):
+    raw_dataset = tf.data.TFRecordDataset([filename], num_parallel_reads=tf.data.experimental.AUTOTUNE)
+    parsed_image_dataset = raw_dataset.map(return_parse_function(features))
+
+
 def write_tf_record(path, record_name, rewrite=False, thread_count=int(cpu_count() * .9 - 1),
                     wanted_values_for_bboxes=None, extension=np.inf, is_3D=True):
     add = '_2D'
@@ -204,7 +216,7 @@ def write_tf_record(path, record_name, rewrite=False, thread_count=int(cpu_count
         t = Thread(target=worker_def, args=(A,))
         t.start()
         threads.append(t)
-    for iteration in data_dict['Images'].keys():
+    for iteration in list(data_dict['Images'].keys())[:8]:
         print(iteration)
         image_path, annotation_path = data_dict['Images'][iteration], data_dict['Annotations'][iteration]
         item = {'image_path':image_path,'annotation_path':annotation_path,'overall_dict':overall_dict,
