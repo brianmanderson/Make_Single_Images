@@ -227,10 +227,15 @@ def write_tf_record(path, record_name, rewrite=False, thread_count=int(cpu_count
     for t in threads:
         t.join()
     print('Writing record...')
+    examples = 0
     writer = tf.io.TFRecordWriter(filename)
     for image_path in overall_dict.keys():
         writer.write(overall_dict[image_path])
+        examples += 1
     writer.close()
+    fid = open(filename.replace('.tfrecord','_Num_Examples.txt'),'w+')
+    fid.write(str(examples))
+    fid.close()
     features = return_image_feature_description(wanted_values_for_bboxes, is_3D=is_3D)
     save_obj(filename.replace('.tfrecord','_features.pkl'),features)
     print('Finished!')
