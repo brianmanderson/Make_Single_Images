@@ -190,7 +190,7 @@ def read_dataset(filename, features):
     parsed_image_dataset = raw_dataset.map(return_parse_function(features))
 
 
-def write_tf_record(path, record_name, rewrite=False, thread_count=int(cpu_count() * .9 - 1),
+def write_tf_record(path, record_name='Record', rewrite=False, thread_count=int(cpu_count() * .9 - 1),
                     wanted_values_for_bboxes=None, extension=np.inf, is_3D=True):
     add = '_2D'
     if is_3D:
