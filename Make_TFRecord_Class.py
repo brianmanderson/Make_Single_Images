@@ -191,10 +191,14 @@ def read_dataset(filename, features):
 
 
 def write_tf_record(path, record_name='Record', rewrite=False, thread_count=int(cpu_count() * .9 - 1),
-                    wanted_values_for_bboxes=None, extension=np.inf, is_3D=True):
+                    wanted_values_for_bboxes=None, extension=None, is_3D=True):
     add = '_2D'
     if is_3D:
         add = '_3D'
+        if extension is None:
+            extension = np.inf
+    elif extension is None:
+        extension = 0
     filename = os.path.join(path,'{}{}.tfrecord'.format(record_name,add))
     if os.path.exists(filename) and not rewrite:
         return None
