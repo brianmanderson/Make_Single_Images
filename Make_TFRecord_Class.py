@@ -57,6 +57,8 @@ def return_example_proto(base_dictionary):
             feature[key] = _int64_feature(data)
         elif type(data) is np.ndarray:
             feature[key] = _bytes_feature(data.tostring())
+        elif type(data) is str:
+            feature[key] = _bytes_feature(tf.constant(data))
     example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
     return example_proto
 
