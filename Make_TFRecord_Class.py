@@ -148,7 +148,7 @@ def get_features(image_path, annotation_path, extension=np.inf, wanted_values_fo
         features['z_images'] = z_images
         features['rows'] = rows
         features['cols'] = cols
-        features['spacing'] = np.asarray(annotation_handle.GetSpacing())
+        features['spacing'] = np.asarray(annotation_handle.GetSpacing(), dtype='float32')
         if wanted_values_for_bboxes is not None:
             for val in wanted_values_for_bboxes:
                 slices = np.where(annotation == val)
