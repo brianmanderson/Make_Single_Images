@@ -139,8 +139,8 @@ def get_features(image_path, annotation_path, extension=np.inf, wanted_values_fo
         stop = int(non_zero_values[-1])
     z_images, rows, cols = annotation.shape
     image, annotation = image.astype('float32'), annotation.astype('int8')
-    features['image_path'] = image_path
     if is_3D:
+        features['image_path'] = image_path
         features['image'] = image
         features['annotation'] = annotation
         features['start'] = start
@@ -160,6 +160,7 @@ def get_features(image_path, annotation_path, extension=np.inf, wanted_values_fo
     else:
         for index in range(z_images):
             image_features = OrderedDict()
+            image_features['image_path'] = image_path
             image_features['image'] = image[index]
             image_features['annotation'] = annotation[index]
             image_features['rows'] = rows
@@ -176,10 +177,7 @@ def worker_def(A):
         if item is None:
             break
         else:
-            try:
-                base_class(**item)
-            except:
-                print('failed?')
+            base_class(**item)
             q.task_done()
 
 
