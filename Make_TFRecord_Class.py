@@ -88,6 +88,7 @@ def get_bounding_boxes(annotation_handle,value):
 def return_image_feature_description(wanted_values_for_bboxes=None, is_3D=True):
     if is_3D:
         image_feature_description = {
+            'image_path': tf.io.FixedLenFeature([], tf.string),
             'image': tf.io.FixedLenFeature([], tf.string),
             'annotation': tf.io.FixedLenFeature([], tf.string),
             'start': tf.io.FixedLenFeature([], tf.int64),
@@ -103,6 +104,7 @@ def return_image_feature_description(wanted_values_for_bboxes=None, is_3D=True):
                 image_feature_description['volumes_{}'.format(val)] = tf.io.FixedLenFeature([], tf.string)
     else:
         image_feature_description = {
+            'image_path': tf.io.FixedLenFeature([], tf.string),
             'image': tf.io.FixedLenFeature([], tf.string),
             'annotation': tf.io.FixedLenFeature([], tf.string),
             'rows': tf.io.FixedLenFeature([], tf.int64),
@@ -135,6 +137,7 @@ def get_features(image_path, annotation_path, extension=np.inf, wanted_values_fo
         stop = int(non_zero_values[-1])
     z_images, rows, cols = annotation.shape
     image, annotation = image.astype('float32'), annotation.astype('int8')
+    features['image_path'] = image_path
     if is_3D:
         features['image'] = image
         features['annotation'] = annotation
@@ -191,14 +194,10 @@ def read_dataset(filename, features):
 
 
 def write_tf_record(path, record_name='Record', rewrite=False, thread_count=int(cpu_count() * .9 - 1),
-                    wanted_values_for_bboxes=None, extension=None, is_3D=True):
+                    wanted_values_for_bboxes=None, extension=np.inf, is_3D=True):
     add = '_2D'
     if is_3D:
         add = '_3D'
-        if extension is None:
-            extension = np.inf
-    elif extension is None:
-        extension = 0
     filename = os.path.join(path,'{}{}.tfrecord'.format(record_name,add))
     if os.path.exists(filename) and not rewrite:
         return None
