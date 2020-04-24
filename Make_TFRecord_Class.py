@@ -64,8 +64,8 @@ def return_example_proto(base_dictionary):
 
 
 def serialize_example(image_path, annotation_path, overall_dict={}, wanted_values_for_bboxes=None, extension=np.inf,
-                      is_3D=True, max_z=np.inf, chop_ends=False):
-    base_dictionary = get_features(image_path,annotation_path,extension=extension,chop_ends=chop_ends,
+                      is_3D=True, max_z=np.inf, mirror_small_bits=True):
+    base_dictionary = get_features(image_path,annotation_path,extension=extension,mirror_small_bits=mirror_small_bits,
                                    wanted_values_for_bboxes=wanted_values_for_bboxes, is_3D=is_3D, max_z=max_z)
     for image_key in base_dictionary:
         example_proto = return_example_proto(base_dictionary[image_key])
@@ -124,7 +124,7 @@ def get_start_stop(annotation, extension=np.inf):
 
 
 def get_features(image_path, annotation_path, extension=np.inf, wanted_values_for_bboxes=None,
-                 is_3D=True, max_z=np.inf, chop_ends=False):
+                 is_3D=True, max_z=np.inf, mirror_small_bits=False):
     image_handle, annotation_handle = sitk.ReadImage(image_path), sitk.ReadImage(annotation_path)
     features = OrderedDict()
     annotation = sitk.GetArrayFromImage(annotation_handle).astype('int8')
@@ -141,13 +141,22 @@ def get_features(image_path, annotation_path, extension=np.inf, wanted_values_fo
             image_features = OrderedDict()
             if start_chop >= z_images_base:
                 continue
-            image_size, rows, cols = annotation_base[start_chop:start_chop+step,...].shape
-            if chop_ends and image_size < step:
-                continue
-            annotation = annotation_base[start_chop:start_chop+step,...]
+            image = image_base[start_chop:start_chop + step, ...]
+            annotation = annotation_base[start_chop:start_chop + step, ...]
+            image_size, rows, cols = image.shape
+            if image_size < step:
+                if mirror_small_bits:
+                    while image.shape[0] < step:
+                        mirror_image = np.flip(image,axis=0)
+                        mirror_annotation = np.flip(annotation, axis=0)
+                        image = np.concatenate([image,mirror_image],axis=0)
+                        annotation = np.concatenate([annotation,mirror_annotation],axis=0)
+                    image = image[:step]
+                    annotation = annotation[:step]
+                else:
+                    continue
             start, stop = get_start_stop(annotation, extension)
             image_features['image_path'] = image_path
-            image = image_base[start_chop:start_chop+step,...]
             image_features['image'] = image
             image_features['annotation'] = annotation
             image_features['start'] = start
@@ -207,14 +216,12 @@ def read_dataset(filename, features):
 
 
 def write_tf_record(path, record_name='Record', rewrite=False, thread_count=int(cpu_count() * .9 - 1),
-                    wanted_values_for_bboxes=None, extension=np.inf, is_3D=True, max_z=np.inf, chop_ends=False):
+                    wanted_values_for_bboxes=None, extension=np.inf, is_3D=True, max_z=np.inf, mirror_small_bits=True):
     add = '_2D'
     if is_3D:
         add = '_3D'
         if max_z != np.inf:
-            add += '_{}maxz'.format(max_z)
-            if chop_ends:
-                add += '_chopends'
+            add += '_{}chunks'.format(max_z)
     filename = os.path.join(path,'{}{}.tfrecord'.format(record_name,add))
     if os.path.exists(filename) and not rewrite:
         return None
@@ -241,7 +248,7 @@ def write_tf_record(path, record_name='Record', rewrite=False, thread_count=int(
         image_path, annotation_path = data_dict['Images'][iteration], data_dict['Annotations'][iteration]
         item = {'image_path':image_path,'annotation_path':annotation_path,'overall_dict':overall_dict,
                 'wanted_values_for_bboxes':wanted_values_for_bboxes, 'extension':extension, 'is_3D':is_3D,
-                'max_z':max_z, 'chop_ends':chop_ends}
+                'max_z':max_z, 'mirror_small_bits':mirror_small_bits}
         q.put(item)
     for i in range(thread_count):
         q.put(None)
