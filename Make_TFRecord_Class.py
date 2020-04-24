@@ -64,9 +64,9 @@ def return_example_proto(base_dictionary):
 
 
 def serialize_example(image_path, annotation_path, overall_dict={}, wanted_values_for_bboxes=None, extension=np.inf,
-                      is_3D=True):
-    base_dictionary = get_features(image_path,annotation_path,extension=extension,
-                                   wanted_values_for_bboxes=wanted_values_for_bboxes, is_3D=is_3D)
+                      is_3D=True, max_z=np.inf, chop_ends=False):
+    base_dictionary = get_features(image_path,annotation_path,extension=extension,chop_ends=chop_ends,
+                                   wanted_values_for_bboxes=wanted_values_for_bboxes, is_3D=is_3D, max_z=max_z)
     if is_3D:
         example_proto = return_example_proto(base_dictionary)
         overall_dict[image_path] = example_proto.SerializeToString()
@@ -110,61 +110,74 @@ def return_image_feature_description(wanted_values_for_bboxes=None, is_3D=True):
             'image': tf.io.FixedLenFeature([], tf.string),
             'annotation': tf.io.FixedLenFeature([], tf.string),
             'rows': tf.io.FixedLenFeature([], tf.int64),
-            'cols': tf.io.FixedLenFeature([], tf.int64)
+            'cols': tf.io.FixedLenFeature([], tf.int64),
+            'spacing': tf.io.FixedLenFeature([], tf.string)
         }
     return image_feature_description
 
 
+def get_start_stop(annotation, extension=np.inf):
+    non_zero_values = np.where(np.max(annotation,axis=(1,2)) > 0)[0]
+    start, stop = -1, -1
+    if non_zero_values.any():
+        start = int(non_zero_values[0])
+        stop = int(non_zero_values[-1])
+        start = max([start - extension, 0])
+        stop = min([stop + extension, annotation.shape[0]])
+    return start, stop
+
 def get_features(image_path, annotation_path, extension=np.inf, wanted_values_for_bboxes=None,
-                 is_3D=True):
+                 is_3D=True, max_z=np.inf, chop_ends=False):
     image_handle, annotation_handle = sitk.ReadImage(image_path), sitk.ReadImage(annotation_path)
     features = OrderedDict()
     annotation = sitk.GetArrayFromImage(annotation_handle).astype('int8')
-    non_zero_values = np.where(annotation > 0)[0]
-    if not np.any(non_zero_values):
-        print('Found nothing for ' + image_path)
-    start = int(non_zero_values[0])
-    stop = int(non_zero_values[-1])
-    start_images = max([start - extension, 0])
-    stop_images = min([stop + extension, annotation.shape[0]])
+    start, stop = get_start_stop(annotation, extension)
     image = sitk.GetArrayFromImage(image_handle).astype('float32')
-    if start_images != 0 or stop_images != image.shape[0]:
-        annotation = annotation[start_images:stop_images, ...]
-        image = image[start_images:stop_images,...]
-        annotation_handle = sitk.GetImageFromArray(annotation)
-        non_zero_values = np.where(annotation > 0)[0]
-        if not np.any(non_zero_values):
-            print('Found nothing for ' + image_path)
-        start = int(non_zero_values[0])
-        stop = int(non_zero_values[-1])
-    z_images, rows, cols = annotation.shape
-    image, annotation = image.astype('float32'), annotation.astype('int8')
+    if start != -1 and stop != -1:
+        image, annotation = image[start:stop,...], annotation[start:stop,...]
+    z_images_base, rows, cols = annotation.shape
+    image_base, annotation_base = image.astype('float32'), annotation.astype('int8')
     if is_3D:
-        features['image_path'] = image_path
-        features['image'] = image
-        features['annotation'] = annotation
-        features['start'] = start
-        features['stop'] = stop
-        features['z_images'] = z_images
-        features['rows'] = rows
-        features['cols'] = cols
-        features['spacing'] = np.asarray(annotation_handle.GetSpacing(), dtype='float32')
-        if wanted_values_for_bboxes is not None:
-            for val in wanted_values_for_bboxes:
-                slices = np.where(annotation == val)
-                features['volumes_{}'.format(val)] = np.asarray([0])
-                if slices:
-                    bounding_boxes, volumes = get_bounding_boxes(annotation_handle,val)
-                    features['bounding_boxes_{}'.format(val)] = bounding_boxes
-                    features['volumes_{}'.format(val)] = volumes
+        image_features = OrderedDict()
+        start_chop = 0
+        step = min([max_z, z_images_base])
+        for index in range(z_images_base//step+1):
+            if start_chop >= z_images_base:
+                continue
+            image_features['image_path'] = image_path
+            image = image_base[start_chop:start_chop+step,...]
+            image_size, rows, cols = image.shape
+            if chop_ends and image_size < step:
+                continue
+            annotation = annotation_base[start_chop:start_chop+step,...]
+            start, stop = get_start_stop(annotation, extension)
+            if start == -1 and stop == -1:
+                continue # We've got no annotation here, might as well ignore
+            image_features['start'] = start
+            image_features['stop'] = stop
+            image_features['z_images'] = image_size
+            image_features['rows'] = rows
+            image_features['cols'] = cols
+            image_features['spacing'] = np.asarray(annotation_handle.GetSpacing(), dtype='float32')
+            start_chop += step
+            if wanted_values_for_bboxes is not None:
+                for val in wanted_values_for_bboxes:
+                    slices = np.where(annotation == val)
+                    image_features['volumes_{}'.format(val)] = np.asarray([0])
+                    if slices:
+                        bounding_boxes, volumes = get_bounding_boxes(sitk.GetImageFromArray(annotation), val)
+                        image_features['bounding_boxes_{}'.format(val)] = bounding_boxes
+                        image_features['volumes_{}'.format(val)] = volumes
+            features['Image_{}'.format(index)] = image_features
     else:
-        for index in range(z_images):
+        for index in range(z_images_base):
             image_features = OrderedDict()
             image_features['image_path'] = image_path
             image_features['image'] = image[index]
             image_features['annotation'] = annotation[index]
             image_features['rows'] = rows
             image_features['cols'] = cols
+            image_features['spacing'] = np.asarray(annotation_handle.GetSpacing(), dtype='float32')[:-1]
             features['Image_{}'.format(index)] = image_features
     return features
 
@@ -194,10 +207,14 @@ def read_dataset(filename, features):
 
 
 def write_tf_record(path, record_name='Record', rewrite=False, thread_count=int(cpu_count() * .9 - 1),
-                    wanted_values_for_bboxes=None, extension=np.inf, is_3D=True):
+                    wanted_values_for_bboxes=None, extension=np.inf, is_3D=True, max_z=np.inf, chop_ends=False):
     add = '_2D'
     if is_3D:
         add = '_3D'
+        if max_z != np.inf:
+            add += '_{}maxz'.format(max_z)
+            if chop_ends:
+                add += '_chopends'
     filename = os.path.join(path,'{}{}.tfrecord'.format(record_name,add))
     if os.path.exists(filename) and not rewrite:
         return None
@@ -223,7 +240,8 @@ def write_tf_record(path, record_name='Record', rewrite=False, thread_count=int(
         print(iteration)
         image_path, annotation_path = data_dict['Images'][iteration], data_dict['Annotations'][iteration]
         item = {'image_path':image_path,'annotation_path':annotation_path,'overall_dict':overall_dict,
-                'wanted_values_for_bboxes':wanted_values_for_bboxes, 'extension':extension, 'is_3D':is_3D}
+                'wanted_values_for_bboxes':wanted_values_for_bboxes, 'extension':extension, 'is_3D':is_3D,
+                'max_z':max_z, 'chop_ends':chop_ends}
         q.put(item)
     for i in range(thread_count):
         q.put(None)
