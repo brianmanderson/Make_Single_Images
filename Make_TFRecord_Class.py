@@ -67,13 +67,9 @@ def serialize_example(image_path, annotation_path, overall_dict={}, wanted_value
                       is_3D=True, max_z=np.inf, chop_ends=False):
     base_dictionary = get_features(image_path,annotation_path,extension=extension,chop_ends=chop_ends,
                                    wanted_values_for_bboxes=wanted_values_for_bboxes, is_3D=is_3D, max_z=max_z)
-    if is_3D:
-        example_proto = return_example_proto(base_dictionary)
-        overall_dict[image_path] = example_proto.SerializeToString()
-    else:
-        for image_key in base_dictionary:
-            example_proto = return_example_proto(base_dictionary[image_key])
-            overall_dict['{}_{}'.format(image_path,image_key)] = example_proto.SerializeToString()
+    for image_key in base_dictionary:
+        example_proto = return_example_proto(base_dictionary[image_key])
+        overall_dict['{}_{}'.format(image_path, image_key)] = example_proto.SerializeToString()
 
 
 def get_bounding_boxes(annotation_handle,value):
