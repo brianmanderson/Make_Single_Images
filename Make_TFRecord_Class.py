@@ -122,6 +122,7 @@ def get_start_stop(annotation, extension=np.inf):
         stop = min([stop + extension, annotation.shape[0]])
     return start, stop
 
+
 def get_features(image_path, annotation_path, extension=np.inf, wanted_values_for_bboxes=None,
                  is_3D=True, max_z=np.inf, chop_ends=False):
     image_handle, annotation_handle = sitk.ReadImage(image_path), sitk.ReadImage(annotation_path)
@@ -140,13 +141,11 @@ def get_features(image_path, annotation_path, extension=np.inf, wanted_values_fo
         for index in range(z_images_base//step+1):
             if start_chop >= z_images_base:
                 continue
-            annotation = annotation_base[start_chop:start_chop+step,...]
-            image_size, rows, cols = annotation.shape
+            image_size, rows, cols = annotation_base[start_chop:start_chop+step,...].shape
             if chop_ends and image_size < step:
                 continue
+            annotation = annotation_base[start_chop:start_chop+step,...]
             start, stop = get_start_stop(annotation, extension)
-            if start == -1 and stop == -1:
-                continue # We've got no annotation here, might as well ignore
             image_features['image_path'] = image_path
             image = image_base[start_chop:start_chop+step,...]
             image_features['image'] = image
@@ -188,7 +187,10 @@ def worker_def(A):
         if item is None:
             break
         else:
-            base_class(**item)
+            try:
+                base_class(**item)
+            except:
+                print('Failed?')
             q.task_done()
 
 
