@@ -135,10 +135,10 @@ def get_features(image_path, annotation_path, extension=np.inf, wanted_values_fo
     z_images_base, rows, cols = annotation.shape
     image_base, annotation_base = image.astype('float32'), annotation.astype('int8')
     if is_3D:
-        image_features = OrderedDict()
         start_chop = 0
         step = min([max_z, z_images_base])
         for index in range(z_images_base//step+1):
+            image_features = OrderedDict()
             if start_chop >= z_images_base:
                 continue
             image_size, rows, cols = annotation_base[start_chop:start_chop+step,...].shape
