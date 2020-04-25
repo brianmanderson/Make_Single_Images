@@ -155,6 +155,8 @@ def get_features(image_path, annotation_path, extension=np.inf, wanted_values_fo
                 else:
                     continue
             start, stop = get_start_stop(annotation, extension)
+            if start == -1 and stop == -1:
+                continue # Nothing found inside anyway
             image_features['image_path'] = image_path
             image_features['image'] = image
             image_features['annotation'] = annotation
