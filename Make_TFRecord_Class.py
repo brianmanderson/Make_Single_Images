@@ -143,8 +143,7 @@ def get_features(image_path, annotation_path, extension=np.inf, wanted_values_fo
                 continue
             image = image_base[start_chop:start_chop + step, ...]
             annotation = annotation_base[start_chop:start_chop + step, ...]
-            image_size, rows, cols = image.shape
-            if image_size < step:
+            if image.shape[0] < step:
                 if mirror_small_bits:
                     while image.shape[0] < step:
                         mirror_image = np.flip(image,axis=0)
@@ -161,9 +160,9 @@ def get_features(image_path, annotation_path, extension=np.inf, wanted_values_fo
             image_features['annotation'] = annotation
             image_features['start'] = start
             image_features['stop'] = stop
-            image_features['z_images'] = image_size
-            image_features['rows'] = rows
-            image_features['cols'] = cols
+            image_features['z_images'] = image.shape[0]
+            image_features['rows'] = image.shape[1]
+            image_features['cols'] = image.shape[2]
             image_features['spacing'] = np.asarray(annotation_handle.GetSpacing(), dtype='float32')
             start_chop += step
             if wanted_values_for_bboxes is not None:
