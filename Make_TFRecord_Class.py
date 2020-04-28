@@ -2,8 +2,6 @@ __author__ = 'Brian M Anderson'
 # Created on 4/7/2020
 
 import tensorflow as tf
-import SimpleITK as sitk
-import numpy as np
 import os, pickle
 import time
 from .Plot_And_Scroll_Images.Plot_Scroll_Images import plot_scroll_Image
