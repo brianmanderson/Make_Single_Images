@@ -32,6 +32,17 @@ def load_obj(path):
         return out
 
 
+def return_feature(data):
+    if type(data) is int:
+        return _int64_feature(tf.constant(data, dtype='int64'))
+    elif type(data) is np.ndarray:
+        return _bytes_feature(data.tostring())
+    elif type(data) is str:
+        return _bytes_feature(tf.constant(data))
+    elif type(data) is np.float32:
+        return _float_feature(tf.constant(data, dtype='float32'))
+
+
 def _bytes_feature(value):
     if isinstance(value, type(tf.constant(0))):
         value = value.numpy()
@@ -91,40 +102,6 @@ def get_bounding_boxes(annotation_handle,value):
     bounding_boxes = [stats.GetBoundingBox(l) for l in stats.GetLabels()]
     volumes = np.asarray([stats.GetPhysicalSize(l) for l in stats.GetLabels()]).astype('float32')
     return bounding_boxes, volumes
-
-
-def return_image_feature_description(wanted_values_for_bboxes=None, is_3D=True):
-    if is_3D:
-        image_feature_description = {
-            'image_path': tf.io.FixedLenFeature([], tf.string),
-            'image': tf.io.FixedLenFeature([], tf.string),
-            'annotation': tf.io.FixedLenFeature([], tf.string),
-            'start': tf.io.FixedLenFeature([], tf.int64),
-            'stop': tf.io.FixedLenFeature([], tf.int64),
-            'z_images': tf.io.FixedLenFeature([], tf.int64),
-            'rows': tf.io.FixedLenFeature([], tf.int64),
-            'cols': tf.io.FixedLenFeature([], tf.int64),
-            'spacing': tf.io.FixedLenFeature([], tf.string)
-        }
-        if wanted_values_for_bboxes is not None:
-            for val in wanted_values_for_bboxes:
-                image_feature_description['bounding_boxes_z_start_{}'.format(val)] = tf.io.FixedLenFeature([], tf.int64)
-                image_feature_description['bounding_boxes_r_start_{}'.format(val)] = tf.io.FixedLenFeature([], tf.int64)
-                image_feature_description['bounding_boxes_c_start_{}'.format(val)] = tf.io.FixedLenFeature([], tf.int64)
-                image_feature_description['bounding_boxes_z_stop_{}'.format(val)] = tf.io.FixedLenFeature([], tf.int64)
-                image_feature_description['bounding_boxes_r_stop_{}'.format(val)] = tf.io.FixedLenFeature([], tf.int64)
-                image_feature_description['bounding_boxes_c_stop_{}'.format(val)] = tf.io.FixedLenFeature([], tf.int64)
-                image_feature_description['volumes_{}'.format(val)] = tf.io.FixedLenFeature([], tf.float32)
-    else:
-        image_feature_description = {
-            'image_path': tf.io.FixedLenFeature([], tf.string),
-            'image': tf.io.FixedLenFeature([], tf.string),
-            'annotation': tf.io.FixedLenFeature([], tf.string),
-            'rows': tf.io.FixedLenFeature([], tf.int64),
-            'cols': tf.io.FixedLenFeature([], tf.int64),
-            'spacing': tf.io.FixedLenFeature([], tf.string)
-        }
-    return image_feature_description
 
 
 def get_start_stop(annotation, extension=np.inf):
@@ -229,18 +206,6 @@ def worker_def(A):
             q.task_done()
 
 
-def return_parse_function(image_feature_description):
-
-    def _parse_image_function(example_proto):
-        return tf.io.parse_single_example(example_proto, image_feature_description)
-    return _parse_image_function
-
-
-def read_dataset(filename, features):
-    raw_dataset = tf.data.TFRecordDataset([filename], num_parallel_reads=tf.data.experimental.AUTOTUNE)
-    parsed_image_dataset = raw_dataset.map(return_parse_function(features))
-
-
 def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_count() * .9 - 1),
                     wanted_values_for_bboxes=None, extension=np.inf, is_3D=True, max_z=np.inf, mirror_small_bits=True,
                     shuffle=False):
@@ -290,7 +255,7 @@ def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_
         t = Thread(target=worker_def, args=(A,))
         t.start()
         threads.append(t)
-    for iteration in list(data_dict['Images'].keys()):
+    for iteration in list(data_dict['Images'].keys())[:5]:
         print(iteration)
         image_path, annotation_path = data_dict['Images'][iteration], data_dict['Annotations'][iteration]
         item = {'image_path':image_path,'annotation_path':annotation_path,'overall_dict':overall_dict,
@@ -319,7 +284,6 @@ def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_
     fid = open(filename.replace('.tfrecord','_Num_Examples.txt'),'w+')
     fid.write(str(examples))
     fid.close()
-    # features = return_image_feature_description(wanted_values_for_bboxes, is_3D=is_3D)
     save_obj(filename.replace('.tfrecord','_features.pkl'),features)
     print('Finished!')
     stop = time.time()
