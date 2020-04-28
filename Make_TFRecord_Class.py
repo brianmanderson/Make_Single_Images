@@ -104,9 +104,10 @@ def get_features(image_path, annotation_path, image_processors=None):
     features = {'Base':base_features}
     if image_processors is not None:
         for image_processor in image_processors:
-            for key in features:
-                features = image_processor.parse(features[key])
-    return features
+            features_keys = list(features.keys())
+            for key in features_keys:
+                features[key] = image_processor.parse(features[key])
+    return features['Base']
 
 
 def worker_def(A):
@@ -125,7 +126,7 @@ def worker_def(A):
 
 
 def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_count() * .9 - 1),
-                    is_3D=True, max_z=np.inf, shuffle=False, image_processors=None):
+                    is_3D=True, extension=np.inf, shuffle=False, image_processors=None):
     '''
     :param path: path to where Overall_Data and mask files are located
     :param record_name: name of record, without .tfrecord attached
@@ -134,8 +135,6 @@ def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_
     :param wanted_values_for_bboxes: A list of values that you want to calc bbox for [1,2,etc.]
     :param extension: extension above and below annotation, recommend np.inf for validation and test
     :param is_3D: Take the whole patient or break up into 2D images
-    :param max_z: whole 3D patient too large? Break up into usable chunks (shouldn't be necessary, hopefully TF2.2 fixes..
-    :param mirror_small_bits: If a chunk is too small based on max_z, reflect it to fill? True/False
     :param shuffle: shuffle the output examples? Can be useful to allow for a smaller buffer without worrying about distribution
     :param image_processors: a list of image processes that can take the image and annotation dictionary, follow the
     :return:
@@ -143,18 +142,15 @@ def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_
     start = time.time()
     if image_processors is None:
         if is_3D:
-            image_processors = [Distribute_into_3D()]
+            image_processors = [Clip_Images_By_Extension(extension=extension), Distribute_into_3D()]
         else:
-            image_processors = [Distribute_into_2D()]
+            image_processors = [Clip_Images_By_Extension(extension=extension), Distribute_into_2D()]
     add = ''
     if record_name is None:
         record_name = 'Record'
         add = '_2D'
         if is_3D:
             add = '_3D'
-            if max_z != np.inf:
-                add += '_{}chunks'.format(max_z)
-
     else:
         record_name = record_name.split('.tfrecord')[0]
     filename = os.path.join(path,'{}{}.tfrecord'.format(record_name,add))
@@ -178,7 +174,7 @@ def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_
         t = Thread(target=worker_def, args=(A,))
         t.start()
         threads.append(t)
-    for iteration in list(data_dict['Images'].keys())[:5]:
+    for iteration in list(data_dict['Images'].keys()):
         print(iteration)
         image_path, annotation_path = data_dict['Images'][iteration], data_dict['Annotations'][iteration]
         item = {'image_path':image_path,'annotation_path':annotation_path,'overall_dict':overall_dict,

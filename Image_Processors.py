@@ -3,6 +3,7 @@ __author__ = 'Brian M Anderson'
 import SimpleITK as sitk
 import numpy as np
 from _collections import OrderedDict
+from .Plot_And_Scroll_Images.Plot_Scroll_Images import plot_scroll_Image
 
 
 def get_start_stop(annotation, extension=np.inf):
@@ -76,7 +77,7 @@ class Distribute_into_3D(Image_Processor):
                         annotation = np.concatenate([annotation, mirror_annotation], axis=0)
                     image = image[:step]
                     annotation = annotation[:step]
-            start, stop = get_start_stop(annotation)
+            start, stop = get_start_stop(annotation, extension=0)
             image_features['image_path'] = image_path
             image_features['image'] = image
             image_features['annotation'] = annotation
@@ -87,6 +88,7 @@ class Distribute_into_3D(Image_Processor):
             image_features['cols'] = image.shape[2]
             image_features['spacing'] = spacing
             out_features['Image_{}'.format(index)] = image_features
+            start_chop += step
         return out_features
 
 
