@@ -5,6 +5,7 @@ import tensorflow as tf
 import SimpleITK as sitk
 import numpy as np
 import os, pickle
+import time
 from .Plot_And_Scroll_Images.Plot_Scroll_Images import plot_scroll_Image
 from _collections import OrderedDict
 from threading import Thread
@@ -49,18 +50,26 @@ def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
 
-def return_example_proto(base_dictionary):
+def return_example_proto(base_dictionary, image_dictionary_for_pickle={}):
     feature = {}
     for key in base_dictionary:
         data = base_dictionary[key]
         if type(data) is int:
-            feature[key] = _int64_feature(data)
+            feature[key] = _int64_feature(tf.constant(data, dtype='int64'))
+            if key not in image_dictionary_for_pickle:
+                image_dictionary_for_pickle[key] = tf.io.FixedLenFeature([], tf.int64)
         elif type(data) is np.ndarray:
             feature[key] = _bytes_feature(data.tostring())
+            if key not in image_dictionary_for_pickle:
+                image_dictionary_for_pickle[key] = tf.io.FixedLenFeature([], tf.string)
         elif type(data) is str:
             feature[key] = _bytes_feature(tf.constant(data))
+            if key not in image_dictionary_for_pickle:
+                image_dictionary_for_pickle[key] = tf.io.FixedLenFeature([], tf.string)
         elif type(data) is np.float32:
-            feature[key] = _float_feature(tf.constant(data))
+            feature[key] = _float_feature(tf.constant(data, dtype='float32'))
+            if key not in image_dictionary_for_pickle:
+                image_dictionary_for_pickle[key] = tf.io.FixedLenFeature([], tf.float32)
     example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
     return example_proto
 
@@ -70,8 +79,7 @@ def serialize_example(image_path, annotation_path, overall_dict={}, wanted_value
     base_dictionary = get_features(image_path,annotation_path,extension=extension,mirror_small_bits=mirror_small_bits,
                                    wanted_values_for_bboxes=wanted_values_for_bboxes, is_3D=is_3D, max_z=max_z)
     for image_key in base_dictionary:
-        example_proto = return_example_proto(base_dictionary[image_key])
-        overall_dict['{}_{}'.format(image_path, image_key)] = example_proto.SerializeToString()
+        overall_dict['{}_{}'.format(image_path, image_key)] = base_dictionary[image_key]
 
 
 def get_bounding_boxes(annotation_handle,value):
@@ -249,6 +257,7 @@ def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_
     :param shuffle: shuffle the output examples? Can be useful to allow for a smaller buffer without worrying about distribution
     :return:
     '''
+    start = time.time()
     add = ''
     if record_name is None:
         record_name = 'Record'
@@ -281,7 +290,7 @@ def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_
         t = Thread(target=worker_def, args=(A,))
         t.start()
         threads.append(t)
-    for iteration in list(data_dict['Images'].keys()):
+    for iteration in list(data_dict['Images'].keys())[:5]:
         print(iteration)
         image_path, annotation_path = data_dict['Images'][iteration], data_dict['Annotations'][iteration]
         item = {'image_path':image_path,'annotation_path':annotation_path,'overall_dict':overall_dict,
@@ -301,16 +310,20 @@ def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_
         perm = np.arange(len(dict_keys))
         np.random.shuffle(perm)
         dict_keys = dict_keys[perm]
+    features = OrderedDict()
     for image_path in dict_keys:
-        writer.write(overall_dict[image_path])
+        example_proto = return_example_proto(overall_dict[image_path], features)
+        writer.write(example_proto.SerializeToString())
         examples += 1
     writer.close()
     fid = open(filename.replace('.tfrecord','_Num_Examples.txt'),'w+')
     fid.write(str(examples))
     fid.close()
-    features = return_image_feature_description(wanted_values_for_bboxes, is_3D=is_3D)
+    # features = return_image_feature_description(wanted_values_for_bboxes, is_3D=is_3D)
     save_obj(filename.replace('.tfrecord','_features.pkl'),features)
     print('Finished!')
+    stop = time.time()
+    print('Took {} seconds'.format(stop-start))
     return None
 
 
