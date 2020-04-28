@@ -290,7 +290,7 @@ def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_
         t = Thread(target=worker_def, args=(A,))
         t.start()
         threads.append(t)
-    for iteration in list(data_dict['Images'].keys())[:5]:
+    for iteration in list(data_dict['Images'].keys()):
         print(iteration)
         image_path, annotation_path = data_dict['Images'][iteration], data_dict['Annotations'][iteration]
         item = {'image_path':image_path,'annotation_path':annotation_path,'overall_dict':overall_dict,
