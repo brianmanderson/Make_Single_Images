@@ -59,6 +59,8 @@ def return_example_proto(base_dictionary):
             feature[key] = _bytes_feature(data.tostring())
         elif type(data) is str:
             feature[key] = _bytes_feature(tf.constant(data))
+        elif type(data) is np.float32:
+            feature[key] = _float_feature(tf.constant(data))
     example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
     return example_proto
 
@@ -78,7 +80,7 @@ def get_bounding_boxes(annotation_handle,value):
     thresholded_image = sitk.BinaryThreshold(annotation_handle,lowerThreshold=value,upperThreshold=value+1)
     connected_image = Connected_Component_Filter.Execute(thresholded_image)
     stats.Execute(connected_image)
-    bounding_boxes = np.asarray([stats.GetBoundingBox(l) for l in stats.GetLabels()]).astype('int32')
+    bounding_boxes = [stats.GetBoundingBox(l) for l in stats.GetLabels()]
     volumes = np.asarray([stats.GetPhysicalSize(l) for l in stats.GetLabels()]).astype('float32')
     return bounding_boxes, volumes
 
@@ -98,8 +100,13 @@ def return_image_feature_description(wanted_values_for_bboxes=None, is_3D=True):
         }
         if wanted_values_for_bboxes is not None:
             for val in wanted_values_for_bboxes:
-                image_feature_description['bounding_boxes_{}'.format(val)] = tf.io.FixedLenFeature([], tf.string)
-                image_feature_description['volumes_{}'.format(val)] = tf.io.FixedLenFeature([], tf.string)
+                image_feature_description['bounding_boxes_z_start_{}'.format(val)] = tf.io.FixedLenFeature([], tf.int64)
+                image_feature_description['bounding_boxes_r_start_{}'.format(val)] = tf.io.FixedLenFeature([], tf.int64)
+                image_feature_description['bounding_boxes_c_start_{}'.format(val)] = tf.io.FixedLenFeature([], tf.int64)
+                image_feature_description['bounding_boxes_z_stop_{}'.format(val)] = tf.io.FixedLenFeature([], tf.int64)
+                image_feature_description['bounding_boxes_r_stop_{}'.format(val)] = tf.io.FixedLenFeature([], tf.int64)
+                image_feature_description['bounding_boxes_c_stop_{}'.format(val)] = tf.io.FixedLenFeature([], tf.int64)
+                image_feature_description['volumes_{}'.format(val)] = tf.io.FixedLenFeature([], tf.float32)
     else:
         image_feature_description = {
             'image_path': tf.io.FixedLenFeature([], tf.string),
@@ -168,13 +175,23 @@ def get_features(image_path, annotation_path, extension=np.inf, wanted_values_fo
             image_features['spacing'] = np.asarray(annotation_handle.GetSpacing(), dtype='float32')
             start_chop += step
             if wanted_values_for_bboxes is not None:
-                for val in wanted_values_for_bboxes:
+                for val in list(wanted_values_for_bboxes):
                     slices = np.where(annotation == val)
-                    image_features['volumes_{}'.format(val)] = np.asarray([0])
+                    z_start, z_stop, r_start, r_stop, c_start, c_stop = 0, image.shape[0], 0, image.shape[1], 0, image.shape[2]
+                    volumes = np.zeros(1, dtype='float32')
                     if slices:
                         bounding_boxes, volumes = get_bounding_boxes(sitk.GetImageFromArray(annotation), val)
-                        image_features['bounding_boxes_{}'.format(val)] = bounding_boxes
-                        image_features['volumes_{}'.format(val)] = volumes
+                        bounding_boxes = bounding_boxes[0]
+                        volumes = volumes[0]
+                        c_start, r_start, z_start, c_stop, r_stop, z_stop = bounding_boxes
+                        z_stop, r_stop, c_stop = z_start + z_stop, r_start + r_stop, c_start + c_stop
+                    image_features['bounding_boxes_z_start_{}'.format(val)] = z_start
+                    image_features['bounding_boxes_r_start_{}'.format(val)] = r_start
+                    image_features['bounding_boxes_c_start_{}'.format(val)] = c_start
+                    image_features['bounding_boxes_z_stop_{}'.format(val)] = z_stop
+                    image_features['bounding_boxes_r_stop_{}'.format(val)] = r_stop
+                    image_features['bounding_boxes_c_stop_{}'.format(val)] = c_stop
+                    image_features['volumes_{}'.format(val)] = volumes
             features['Image_{}'.format(index)] = image_features
     else:
         for index in range(z_images_base):
@@ -216,7 +233,7 @@ def read_dataset(filename, features):
     parsed_image_dataset = raw_dataset.map(return_parse_function(features))
 
 
-def write_tf_record(path, record_name='Record', rewrite=False, thread_count=int(cpu_count() * .9 - 1),
+def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_count() * .9 - 1),
                     wanted_values_for_bboxes=None, extension=np.inf, is_3D=True, max_z=np.inf, mirror_small_bits=True,
                     shuffle=False):
     '''
@@ -224,7 +241,7 @@ def write_tf_record(path, record_name='Record', rewrite=False, thread_count=int(
     :param record_name: name of record, without .tfrecord attached
     :param rewrite: Do you want to rewrite old records? True/False
     :param thread_count: specify 1 if debugging
-    :param wanted_values_for_bboxes: Do you want to calculate bounding boxes? (1,2,etc.)
+    :param wanted_values_for_bboxes: A list of values that you want to calc bbox for [1,2,etc.]
     :param extension: extension above and below annotation, recommend np.inf for validation and test
     :param is_3D: Take the whole patient or break up into 2D images
     :param max_z: whole 3D patient too large? Break up into usable chunks (shouldn't be necessary, hopefully TF2.2 fixes..
@@ -232,11 +249,17 @@ def write_tf_record(path, record_name='Record', rewrite=False, thread_count=int(
     :param shuffle: shuffle the output examples? Can be useful to allow for a smaller buffer without worrying about distribution
     :return:
     '''
-    add = '_2D'
-    if is_3D:
-        add = '_3D'
-        if max_z != np.inf:
-            add += '_{}chunks'.format(max_z)
+    add = ''
+    if record_name is None:
+        record_name = 'Record'
+        add = '_2D'
+        if is_3D:
+            add = '_3D'
+            if max_z != np.inf:
+                add += '_{}chunks'.format(max_z)
+
+    else:
+        record_name = record_name.split('.tfrecord')[0]
     filename = os.path.join(path,'{}{}.tfrecord'.format(record_name,add))
     if os.path.exists(filename) and not rewrite:
         return None
