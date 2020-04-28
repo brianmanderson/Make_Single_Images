@@ -7,6 +7,7 @@ import numpy as np
 import os, pickle
 import time
 from .Plot_And_Scroll_Images.Plot_Scroll_Images import plot_scroll_Image
+from .Image_Processors import *
 from _collections import OrderedDict
 from threading import Thread
 from multiprocessing import cpu_count
@@ -85,109 +86,26 @@ def return_example_proto(base_dictionary, image_dictionary_for_pickle={}):
     return example_proto
 
 
-def serialize_example(image_path, annotation_path, overall_dict={}, wanted_values_for_bboxes=None, extension=np.inf,
-                      is_3D=True, max_z=np.inf, mirror_small_bits=True):
-    base_dictionary = get_features(image_path,annotation_path,extension=extension,mirror_small_bits=mirror_small_bits,
-                                   wanted_values_for_bboxes=wanted_values_for_bboxes, is_3D=is_3D, max_z=max_z)
+def serialize_example(image_path, annotation_path, overall_dict={}, image_processors=None):
+    base_dictionary = get_features(image_path,annotation_path, image_processors=image_processors)
     for image_key in base_dictionary:
         overall_dict['{}_{}'.format(image_path, image_key)] = base_dictionary[image_key]
 
 
-def get_bounding_boxes(annotation_handle,value):
-    Connected_Component_Filter = sitk.ConnectedComponentImageFilter()
-    stats = sitk.LabelShapeStatisticsImageFilter()
-    thresholded_image = sitk.BinaryThreshold(annotation_handle,lowerThreshold=value,upperThreshold=value+1)
-    connected_image = Connected_Component_Filter.Execute(thresholded_image)
-    stats.Execute(connected_image)
-    bounding_boxes = [stats.GetBoundingBox(l) for l in stats.GetLabels()]
-    volumes = np.asarray([stats.GetPhysicalSize(l) for l in stats.GetLabels()]).astype('float32')
-    return bounding_boxes, volumes
-
-
-def get_start_stop(annotation, extension=np.inf):
-    non_zero_values = np.where(np.max(annotation,axis=(1,2)) > 0)[0]
-    start, stop = -1, -1
-    if non_zero_values.any():
-        start = int(non_zero_values[0])
-        stop = int(non_zero_values[-1])
-        start = max([start - extension, 0])
-        stop = min([stop + extension, annotation.shape[0]])
-    return start, stop
-
-
-def get_features(image_path, annotation_path, extension=np.inf, wanted_values_for_bboxes=None,
-                 is_3D=True, max_z=np.inf, mirror_small_bits=False):
+def get_features(image_path, annotation_path, image_processors=None):
     image_handle, annotation_handle = sitk.ReadImage(image_path), sitk.ReadImage(annotation_path)
-    features = OrderedDict()
+    base_features = OrderedDict()
     annotation = sitk.GetArrayFromImage(annotation_handle).astype('int8')
-    start, stop = get_start_stop(annotation, extension)
     image = sitk.GetArrayFromImage(image_handle).astype('float32')
-    if start != -1 and stop != -1:
-        image, annotation = image[start:stop,...], annotation[start:stop,...]
-    z_images_base, rows, cols = annotation.shape
-    image_base, annotation_base = image.astype('float32'), annotation.astype('int8')
-    if is_3D:
-        start_chop = 0
-        step = min([max_z, z_images_base])
-        for index in range(z_images_base//step+1):
-            image_features = OrderedDict()
-            if start_chop >= z_images_base:
-                continue
-            image = image_base[start_chop:start_chop + step, ...]
-            annotation = annotation_base[start_chop:start_chop + step, ...]
-            if image.shape[0] < step:
-                if mirror_small_bits:
-                    while image.shape[0] < step:
-                        mirror_image = np.flip(image,axis=0)
-                        mirror_annotation = np.flip(annotation, axis=0)
-                        image = np.concatenate([image,mirror_image],axis=0)
-                        annotation = np.concatenate([annotation,mirror_annotation],axis=0)
-                    image = image[:step]
-                    annotation = annotation[:step]
-                else:
-                    continue
-            start, stop = get_start_stop(annotation, extension)
-            if start == -1 and stop == -1:
-                continue # Nothing found inside anyway
-            image_features['image_path'] = image_path
-            image_features['image'] = image
-            image_features['annotation'] = annotation
-            image_features['start'] = start
-            image_features['stop'] = stop
-            image_features['z_images'] = image.shape[0]
-            image_features['rows'] = image.shape[1]
-            image_features['cols'] = image.shape[2]
-            image_features['spacing'] = np.asarray(annotation_handle.GetSpacing(), dtype='float32')
-            start_chop += step
-            if wanted_values_for_bboxes is not None:
-                for val in list(wanted_values_for_bboxes):
-                    slices = np.where(annotation == val)
-                    z_start, z_stop, r_start, r_stop, c_start, c_stop = 0, image.shape[0], 0, image.shape[1], 0, image.shape[2]
-                    volumes = np.zeros(1, dtype='float32')
-                    if slices:
-                        bounding_boxes, volumes = get_bounding_boxes(sitk.GetImageFromArray(annotation), val)
-                        bounding_boxes = bounding_boxes[0]
-                        volumes = volumes[0]
-                        c_start, r_start, z_start, c_stop, r_stop, z_stop = bounding_boxes
-                        z_stop, r_stop, c_stop = z_start + z_stop, r_start + r_stop, c_start + c_stop
-                    image_features['bounding_boxes_z_start_{}'.format(val)] = z_start
-                    image_features['bounding_boxes_r_start_{}'.format(val)] = r_start
-                    image_features['bounding_boxes_c_start_{}'.format(val)] = c_start
-                    image_features['bounding_boxes_z_stop_{}'.format(val)] = z_stop
-                    image_features['bounding_boxes_r_stop_{}'.format(val)] = r_stop
-                    image_features['bounding_boxes_c_stop_{}'.format(val)] = c_stop
-                    image_features['volumes_{}'.format(val)] = volumes
-            features['Image_{}'.format(index)] = image_features
-    else:
-        for index in range(z_images_base):
-            image_features = OrderedDict()
-            image_features['image_path'] = image_path
-            image_features['image'] = image[index]
-            image_features['annotation'] = annotation[index]
-            image_features['rows'] = rows
-            image_features['cols'] = cols
-            image_features['spacing'] = np.asarray(annotation_handle.GetSpacing(), dtype='float32')[:-1]
-            features['Image_{}'.format(index)] = image_features
+    base_features['image'] = image
+    base_features['annotation'] = annotation
+    base_features['image_path'] = image_path
+    base_features['spacing'] = np.asarray(annotation_handle.GetSpacing(), dtype='float32')
+    features = {'Base':base_features}
+    if image_processors is not None:
+        for image_processor in image_processors:
+            for key in features:
+                features = image_processor.parse(features[key])
     return features
 
 
@@ -207,8 +125,7 @@ def worker_def(A):
 
 
 def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_count() * .9 - 1),
-                    wanted_values_for_bboxes=None, extension=np.inf, is_3D=True, max_z=np.inf, mirror_small_bits=True,
-                    shuffle=False):
+                    is_3D=True, max_z=np.inf, shuffle=False, image_processors=None):
     '''
     :param path: path to where Overall_Data and mask files are located
     :param record_name: name of record, without .tfrecord attached
@@ -220,9 +137,15 @@ def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_
     :param max_z: whole 3D patient too large? Break up into usable chunks (shouldn't be necessary, hopefully TF2.2 fixes..
     :param mirror_small_bits: If a chunk is too small based on max_z, reflect it to fill? True/False
     :param shuffle: shuffle the output examples? Can be useful to allow for a smaller buffer without worrying about distribution
+    :param image_processors: a list of image processes that can take the image and annotation dictionary, follow the
     :return:
     '''
     start = time.time()
+    if image_processors is None:
+        if is_3D:
+            image_processors = [Distribute_into_3D()]
+        else:
+            image_processors = [Distribute_into_2D()]
     add = ''
     if record_name is None:
         record_name = 'Record'
@@ -259,8 +182,7 @@ def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_
         print(iteration)
         image_path, annotation_path = data_dict['Images'][iteration], data_dict['Annotations'][iteration]
         item = {'image_path':image_path,'annotation_path':annotation_path,'overall_dict':overall_dict,
-                'wanted_values_for_bboxes':wanted_values_for_bboxes, 'extension':extension, 'is_3D':is_3D,
-                'max_z':max_z, 'mirror_small_bits':mirror_small_bits}
+                'image_processors':image_processors}
         q.put(item)
     for i in range(thread_count):
         q.put(None)
