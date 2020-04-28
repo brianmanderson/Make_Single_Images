@@ -217,7 +217,21 @@ def read_dataset(filename, features):
 
 
 def write_tf_record(path, record_name='Record', rewrite=False, thread_count=int(cpu_count() * .9 - 1),
-                    wanted_values_for_bboxes=None, extension=np.inf, is_3D=True, max_z=np.inf, mirror_small_bits=True):
+                    wanted_values_for_bboxes=None, extension=np.inf, is_3D=True, max_z=np.inf, mirror_small_bits=True,
+                    shuffle=False):
+    '''
+    :param path: path to where Overall_Data and mask files are located
+    :param record_name: name of record, without .tfrecord attached
+    :param rewrite: Do you want to rewrite old records? True/False
+    :param thread_count: specify 1 if debugging
+    :param wanted_values_for_bboxes: Do you want to calculate bounding boxes? (1,2,etc.)
+    :param extension: extension above and below annotation, recommend np.inf for validation and test
+    :param is_3D: Take the whole patient or break up into 2D images
+    :param max_z: whole 3D patient too large? Break up into usable chunks (shouldn't be necessary, hopefully TF2.2 fixes..
+    :param mirror_small_bits: If a chunk is too small based on max_z, reflect it to fill? True/False
+    :param shuffle: shuffle the output examples? Can be useful to allow for a smaller buffer without worrying about distribution
+    :return:
+    '''
     add = '_2D'
     if is_3D:
         add = '_3D'
@@ -258,7 +272,13 @@ def write_tf_record(path, record_name='Record', rewrite=False, thread_count=int(
     print('Writing record...')
     examples = 0
     writer = tf.io.TFRecordWriter(filename)
-    for image_path in overall_dict.keys():
+    dict_keys = overall_dict.keys()
+    if shuffle:
+        dict_keys = np.asarray(list(overall_dict.keys()))
+        perm = np.arange(len(dict_keys))
+        np.random.shuffle(perm)
+        dict_keys = dict_keys[perm]
+    for image_path in dict_keys:
         writer.write(overall_dict[image_path])
         examples += 1
     writer.close()
