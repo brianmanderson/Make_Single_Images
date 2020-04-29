@@ -15,3 +15,13 @@ The reason for this is that you can manipulate how many images you want to load 
              pickle_path=os.path.join(path,'patient_info_Ablation_Zones.pkl'),
              resample=True, desired_output_spacing=(None,None,2.5),extension=extension)
 This is saying we want to grab 50 images above and below the slices which have annotations
+
+Also now supporting TFDataset by making records
+
+image_processors do not need to be given, defaults are provided for 2D and 3D creation
+
+    from Make_Single_Images.Make_TFRecord_Class import write_tf_record, os
+    from Make_Single_Images.Image_Processors.Image_Processors_TFRecord import *
+    path = r'D:\Liver_Work'
+    image_processors = [Normalize_to_annotation(1), Clip_Images_By_Extension(16), Distribute_into_3D()]
+    write_tf_record(os.path.join(path, 'Train'), is_3D=False, rewrite=True, record_name='bbox_test', image_processors=image_processors)
