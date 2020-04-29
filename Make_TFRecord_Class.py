@@ -2,10 +2,10 @@ __author__ = 'Brian M Anderson'
 # Created on 4/7/2020
 
 import tensorflow as tf
-import SimpleITK as sitk
-import numpy as np
 import os, pickle
-from .Plot_And_Scroll_Images.Plot_Scroll_Images import plot_scroll_Image
+import time
+from .Image_Processors.Plot_And_Scroll_Images.Plot_Scroll_Images import plot_scroll_Image
+from .Image_Processors.Image_Processors_TFRecord import *
 from _collections import OrderedDict
 from threading import Thread
 from multiprocessing import cpu_count
@@ -31,6 +31,17 @@ def load_obj(path):
         return out
 
 
+def return_feature(data):
+    if type(data) is int:
+        return _int64_feature(tf.constant(data, dtype='int64'))
+    elif type(data) is np.ndarray:
+        return _bytes_feature(data.tostring())
+    elif type(data) is str:
+        return _bytes_feature(tf.constant(data))
+    elif type(data) is np.float32:
+        return _float_feature(tf.constant(data, dtype='float32'))
+
+
 def _bytes_feature(value):
     if isinstance(value, type(tf.constant(0))):
         value = value.numpy()
@@ -49,144 +60,52 @@ def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
 
-def return_example_proto(base_dictionary):
+def return_example_proto(base_dictionary, image_dictionary_for_pickle={}):
     feature = {}
     for key in base_dictionary:
         data = base_dictionary[key]
         if type(data) is int:
-            feature[key] = _int64_feature(data)
+            feature[key] = _int64_feature(tf.constant(data, dtype='int64'))
+            if key not in image_dictionary_for_pickle:
+                image_dictionary_for_pickle[key] = tf.io.FixedLenFeature([], tf.int64)
         elif type(data) is np.ndarray:
             feature[key] = _bytes_feature(data.tostring())
+            if key not in image_dictionary_for_pickle:
+                image_dictionary_for_pickle[key] = tf.io.FixedLenFeature([], tf.string)
         elif type(data) is str:
             feature[key] = _bytes_feature(tf.constant(data))
+            if key not in image_dictionary_for_pickle:
+                image_dictionary_for_pickle[key] = tf.io.FixedLenFeature([], tf.string)
+        elif type(data) is np.float32:
+            feature[key] = _float_feature(tf.constant(data, dtype='float32'))
+            if key not in image_dictionary_for_pickle:
+                image_dictionary_for_pickle[key] = tf.io.FixedLenFeature([], tf.float32)
     example_proto = tf.train.Example(features=tf.train.Features(feature=feature))
     return example_proto
 
 
-def serialize_example(image_path, annotation_path, overall_dict={}, wanted_values_for_bboxes=None, extension=np.inf,
-                      is_3D=True, max_z=np.inf, mirror_small_bits=True):
-    base_dictionary = get_features(image_path,annotation_path,extension=extension,mirror_small_bits=mirror_small_bits,
-                                   wanted_values_for_bboxes=wanted_values_for_bboxes, is_3D=is_3D, max_z=max_z)
+def serialize_example(image_path, annotation_path, overall_dict={}, image_processors=None):
+    base_dictionary = get_features(image_path,annotation_path, image_processors=image_processors)
     for image_key in base_dictionary:
-        example_proto = return_example_proto(base_dictionary[image_key])
-        overall_dict['{}_{}'.format(image_path, image_key)] = example_proto.SerializeToString()
+        overall_dict['{}_{}'.format(image_path, image_key)] = base_dictionary[image_key]
 
 
-def get_bounding_boxes(annotation_handle,value):
-    Connected_Component_Filter = sitk.ConnectedComponentImageFilter()
-    stats = sitk.LabelShapeStatisticsImageFilter()
-    thresholded_image = sitk.BinaryThreshold(annotation_handle,lowerThreshold=value,upperThreshold=value+1)
-    connected_image = Connected_Component_Filter.Execute(thresholded_image)
-    stats.Execute(connected_image)
-    bounding_boxes = np.asarray([stats.GetBoundingBox(l) for l in stats.GetLabels()]).astype('int32')
-    volumes = np.asarray([stats.GetPhysicalSize(l) for l in stats.GetLabels()]).astype('float32')
-    return bounding_boxes, volumes
-
-
-def return_image_feature_description(wanted_values_for_bboxes=None, is_3D=True):
-    if is_3D:
-        image_feature_description = {
-            'image_path': tf.io.FixedLenFeature([], tf.string),
-            'image': tf.io.FixedLenFeature([], tf.string),
-            'annotation': tf.io.FixedLenFeature([], tf.string),
-            'start': tf.io.FixedLenFeature([], tf.int64),
-            'stop': tf.io.FixedLenFeature([], tf.int64),
-            'z_images': tf.io.FixedLenFeature([], tf.int64),
-            'rows': tf.io.FixedLenFeature([], tf.int64),
-            'cols': tf.io.FixedLenFeature([], tf.int64),
-            'spacing': tf.io.FixedLenFeature([], tf.string)
-        }
-        if wanted_values_for_bboxes is not None:
-            for val in wanted_values_for_bboxes:
-                image_feature_description['bounding_boxes_{}'.format(val)] = tf.io.FixedLenFeature([], tf.string)
-                image_feature_description['volumes_{}'.format(val)] = tf.io.FixedLenFeature([], tf.string)
-    else:
-        image_feature_description = {
-            'image_path': tf.io.FixedLenFeature([], tf.string),
-            'image': tf.io.FixedLenFeature([], tf.string),
-            'annotation': tf.io.FixedLenFeature([], tf.string),
-            'rows': tf.io.FixedLenFeature([], tf.int64),
-            'cols': tf.io.FixedLenFeature([], tf.int64),
-            'spacing': tf.io.FixedLenFeature([], tf.string)
-        }
-    return image_feature_description
-
-
-def get_start_stop(annotation, extension=np.inf):
-    non_zero_values = np.where(np.max(annotation,axis=(1,2)) > 0)[0]
-    start, stop = -1, -1
-    if non_zero_values.any():
-        start = int(non_zero_values[0])
-        stop = int(non_zero_values[-1])
-        start = max([start - extension, 0])
-        stop = min([stop + extension, annotation.shape[0]])
-    return start, stop
-
-
-def get_features(image_path, annotation_path, extension=np.inf, wanted_values_for_bboxes=None,
-                 is_3D=True, max_z=np.inf, mirror_small_bits=False):
+def get_features(image_path, annotation_path, image_processors=None):
     image_handle, annotation_handle = sitk.ReadImage(image_path), sitk.ReadImage(annotation_path)
-    features = OrderedDict()
+    base_features = OrderedDict()
     annotation = sitk.GetArrayFromImage(annotation_handle).astype('int8')
-    start, stop = get_start_stop(annotation, extension)
     image = sitk.GetArrayFromImage(image_handle).astype('float32')
-    if start != -1 and stop != -1:
-        image, annotation = image[start:stop,...], annotation[start:stop,...]
-    z_images_base, rows, cols = annotation.shape
-    image_base, annotation_base = image.astype('float32'), annotation.astype('int8')
-    if is_3D:
-        start_chop = 0
-        step = min([max_z, z_images_base])
-        for index in range(z_images_base//step+1):
-            image_features = OrderedDict()
-            if start_chop >= z_images_base:
-                continue
-            image = image_base[start_chop:start_chop + step, ...]
-            annotation = annotation_base[start_chop:start_chop + step, ...]
-            if image.shape[0] < step:
-                if mirror_small_bits:
-                    while image.shape[0] < step:
-                        mirror_image = np.flip(image,axis=0)
-                        mirror_annotation = np.flip(annotation, axis=0)
-                        image = np.concatenate([image,mirror_image],axis=0)
-                        annotation = np.concatenate([annotation,mirror_annotation],axis=0)
-                    image = image[:step]
-                    annotation = annotation[:step]
-                else:
-                    continue
-            start, stop = get_start_stop(annotation, extension)
-            if start == -1 and stop == -1:
-                continue # Nothing found inside anyway
-            image_features['image_path'] = image_path
-            image_features['image'] = image
-            image_features['annotation'] = annotation
-            image_features['start'] = start
-            image_features['stop'] = stop
-            image_features['z_images'] = image.shape[0]
-            image_features['rows'] = image.shape[1]
-            image_features['cols'] = image.shape[2]
-            image_features['spacing'] = np.asarray(annotation_handle.GetSpacing(), dtype='float32')
-            start_chop += step
-            if wanted_values_for_bboxes is not None:
-                for val in wanted_values_for_bboxes:
-                    slices = np.where(annotation == val)
-                    image_features['volumes_{}'.format(val)] = np.asarray([0])
-                    if slices:
-                        bounding_boxes, volumes = get_bounding_boxes(sitk.GetImageFromArray(annotation), val)
-                        image_features['bounding_boxes_{}'.format(val)] = bounding_boxes
-                        image_features['volumes_{}'.format(val)] = volumes
-            features['Image_{}'.format(index)] = image_features
-    else:
-        for index in range(z_images_base):
-            image_features = OrderedDict()
-            image_features['image_path'] = image_path
-            image_features['image'] = image[index]
-            image_features['annotation'] = annotation[index]
-            image_features['rows'] = rows
-            image_features['cols'] = cols
-            image_features['spacing'] = np.asarray(annotation_handle.GetSpacing(), dtype='float32')[:-1]
-            features['Image_{}'.format(index)] = image_features
-    return features
+    base_features['image'] = image
+    base_features['annotation'] = annotation
+    base_features['image_path'] = image_path
+    base_features['spacing'] = np.asarray(annotation_handle.GetSpacing(), dtype='float32')
+    features = {'Base':base_features}
+    if image_processors is not None:
+        for image_processor in image_processors:
+            features_keys = list(features.keys())
+            for key in features_keys:
+                features[key] = image_processor.parse(features[key])
+    return features['Base']
 
 
 def worker_def(A):
@@ -204,39 +123,34 @@ def worker_def(A):
             q.task_done()
 
 
-def return_parse_function(image_feature_description):
-
-    def _parse_image_function(example_proto):
-        return tf.io.parse_single_example(example_proto, image_feature_description)
-    return _parse_image_function
-
-
-def read_dataset(filename, features):
-    raw_dataset = tf.data.TFRecordDataset([filename], num_parallel_reads=tf.data.experimental.AUTOTUNE)
-    parsed_image_dataset = raw_dataset.map(return_parse_function(features))
-
-
-def write_tf_record(path, record_name='Record', rewrite=False, thread_count=int(cpu_count() * .9 - 1),
-                    wanted_values_for_bboxes=None, extension=np.inf, is_3D=True, max_z=np.inf, mirror_small_bits=True,
-                    shuffle=False):
+def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_count() * .9 - 1),
+                    is_3D=True, extension=np.inf, shuffle=False, image_processors=None):
     '''
     :param path: path to where Overall_Data and mask files are located
     :param record_name: name of record, without .tfrecord attached
     :param rewrite: Do you want to rewrite old records? True/False
     :param thread_count: specify 1 if debugging
-    :param wanted_values_for_bboxes: Do you want to calculate bounding boxes? (1,2,etc.)
+    :param wanted_values_for_bboxes: A list of values that you want to calc bbox for [1,2,etc.]
     :param extension: extension above and below annotation, recommend np.inf for validation and test
     :param is_3D: Take the whole patient or break up into 2D images
-    :param max_z: whole 3D patient too large? Break up into usable chunks (shouldn't be necessary, hopefully TF2.2 fixes..
-    :param mirror_small_bits: If a chunk is too small based on max_z, reflect it to fill? True/False
     :param shuffle: shuffle the output examples? Can be useful to allow for a smaller buffer without worrying about distribution
+    :param image_processors: a list of image processes that can take the image and annotation dictionary, follow the
     :return:
     '''
-    add = '_2D'
-    if is_3D:
-        add = '_3D'
-        if max_z != np.inf:
-            add += '_{}chunks'.format(max_z)
+    start = time.time()
+    if image_processors is None:
+        if is_3D:
+            image_processors = [Clip_Images_By_Extension(extension=extension), Distribute_into_3D()]
+        else:
+            image_processors = [Clip_Images_By_Extension(extension=extension), Distribute_into_2D()]
+    add = ''
+    if record_name is None:
+        record_name = 'Record'
+        add = '_2D'
+        if is_3D:
+            add = '_3D'
+    else:
+        record_name = record_name.split('.tfrecord')[0]
     filename = os.path.join(path,'{}{}.tfrecord'.format(record_name,add))
     if os.path.exists(filename) and not rewrite:
         return None
@@ -259,11 +173,10 @@ def write_tf_record(path, record_name='Record', rewrite=False, thread_count=int(
         t.start()
         threads.append(t)
     for iteration in list(data_dict['Images'].keys()):
-        print(iteration)
         image_path, annotation_path = data_dict['Images'][iteration], data_dict['Annotations'][iteration]
         item = {'image_path':image_path,'annotation_path':annotation_path,'overall_dict':overall_dict,
-                'wanted_values_for_bboxes':wanted_values_for_bboxes, 'extension':extension, 'is_3D':is_3D,
-                'max_z':max_z, 'mirror_small_bits':mirror_small_bits}
+                'image_processors':image_processors}
+        print(image_path)
         q.put(item)
     for i in range(thread_count):
         q.put(None)
@@ -278,16 +191,19 @@ def write_tf_record(path, record_name='Record', rewrite=False, thread_count=int(
         perm = np.arange(len(dict_keys))
         np.random.shuffle(perm)
         dict_keys = dict_keys[perm]
+    features = OrderedDict()
     for image_path in dict_keys:
-        writer.write(overall_dict[image_path])
+        example_proto = return_example_proto(overall_dict[image_path], features)
+        writer.write(example_proto.SerializeToString())
         examples += 1
     writer.close()
     fid = open(filename.replace('.tfrecord','_Num_Examples.txt'),'w+')
     fid.write(str(examples))
     fid.close()
-    features = return_image_feature_description(wanted_values_for_bboxes, is_3D=is_3D)
     save_obj(filename.replace('.tfrecord','_features.pkl'),features)
     print('Finished!')
+    stop = time.time()
+    print('Took {} seconds'.format(stop-start))
     return None
 
 
