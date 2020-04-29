@@ -4,3 +4,6 @@
 [submodule "Plot_And_Scroll_Images"]
 	path = Plot_And_Scroll_Images
 	url = https://github.com/brianmanderson/Plot_And_Scroll_Images.git
+[submodule "Image_Processors"]
+	path = Image_Processors
+	url = https://github.com/brianmanderson/Image_Processors.git
