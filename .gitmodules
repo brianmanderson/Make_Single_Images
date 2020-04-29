@@ -7,3 +7,6 @@
 [submodule "Image_Processors"]
 	path = Image_Processors
 	url = https://github.com/brianmanderson/Image_Processors.git
+[submodule "Image_Processors_Module"]
+	path = Image_Processors_Module
+	url = https://github.com/brianmanderson/Image_Processors_Module.git

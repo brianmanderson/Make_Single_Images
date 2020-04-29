@@ -4,8 +4,8 @@ __author__ = 'Brian M Anderson'
 import tensorflow as tf
 import os, pickle
 import time
-from .Image_Processors.Plot_And_Scroll_Images.Plot_Scroll_Images import plot_scroll_Image
-from .Image_Processors.Image_Processors_TFRecord import *
+from .Image_Processors_Module.Image_Processors_TFRecord import *
+from .Image_Processors_Module.Plot_And_Scroll_Images.Plot_Scroll_Images import plot_scroll_Image
 from _collections import OrderedDict
 from threading import Thread
 from multiprocessing import cpu_count
