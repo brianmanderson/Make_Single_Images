@@ -27,7 +27,7 @@ def load_obj(path):
         with open(path, 'rb') as f:
             return pickle.load(f)
     else:
-        out = {}
+        out = OrderedDict()
         return out
 
 
@@ -61,7 +61,7 @@ def _int64_feature(value):
 
 
 def return_example_proto(base_dictionary, image_dictionary_for_pickle={}):
-    feature = {}
+    feature = OrderedDict()
     for key in base_dictionary:
         data = base_dictionary[key]
         if type(data) is int:
@@ -90,22 +90,33 @@ def serialize_example(image_path, annotation_path, overall_dict={}, image_proces
         overall_dict['{}_{}'.format(image_path, image_key)] = base_dictionary[image_key]
 
 
+def down_dictionary(input_dictionary, out_dictionary=OrderedDict(), out_index=0):
+    if 'image' in input_dictionary.keys():
+        out_dictionary['Example_{}'.format(out_index)] = input_dictionary
+        out_index += 1
+        return out_dictionary, out_index
+    else:
+        for key in input_dictionary.keys():
+            out_dictionary, out_index = down_dictionary(input_dictionary[key], out_dictionary, out_index)
+    return out_dictionary, out_index
+
+
 def get_features(image_path, annotation_path, image_processors=None):
     image_handle, annotation_handle = sitk.ReadImage(image_path), sitk.ReadImage(annotation_path)
-    base_features = OrderedDict()
+    features = OrderedDict()
     annotation = sitk.GetArrayFromImage(annotation_handle).astype('int8')
     image = sitk.GetArrayFromImage(image_handle).astype('float32')
-    base_features['image'] = image
-    base_features['annotation'] = annotation
-    base_features['image_path'] = image_path
-    base_features['spacing'] = np.asarray(annotation_handle.GetSpacing(), dtype='float32')
-    features = {'Base':base_features}
+    features['image'] = image
+    features['annotation'] = annotation
+    features['image_path'] = image_path
+    features['spacing'] = np.asarray(annotation_handle.GetSpacing(), dtype='float32')
     if image_processors is not None:
         for image_processor in image_processors:
-            features_keys = list(features.keys())
-            for key in features_keys:
+            features, _ = down_dictionary(features, OrderedDict(), 0)
+            for key in features.keys():
                 features[key] = image_processor.parse(features[key])
-    return features['Base']
+        features, _ = down_dictionary(features, OrderedDict(), 0)
+    return features
 
 
 def worker_def(A):
@@ -164,7 +175,7 @@ def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_
     for file in annotation_files:
         iteration = file.split('_y')[-1].split('.')[0]
         data_dict['Annotations'][iteration] = os.path.join(path,file)
-    overall_dict = {}
+    overall_dict = OrderedDict()
     q = Queue(maxsize=thread_count)
     A = [q,]
     threads = []
