@@ -135,7 +135,7 @@ def worker_def(A):
             q.task_done()
 
 
-def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_count() * .9 - 1),
+def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_count() * .5),
                     is_3D=True, extension=np.inf, shuffle=True, image_processors=None):
     '''
     :param path: path to where Overall_Data and mask files are located
