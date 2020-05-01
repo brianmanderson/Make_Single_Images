@@ -60,7 +60,7 @@ def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
 
-def return_example_proto(base_dictionary, image_dictionary_for_pickle={}):
+def return_example_proto(base_dictionary, image_dictionary_for_pickle={}, data_type_dictionary={}):
     feature = OrderedDict()
     for key in base_dictionary:
         data = base_dictionary[key]
@@ -72,6 +72,7 @@ def return_example_proto(base_dictionary, image_dictionary_for_pickle={}):
             feature[key] = _bytes_feature(data.tostring())
             if key not in image_dictionary_for_pickle:
                 image_dictionary_for_pickle[key] = tf.io.FixedLenFeature([], tf.string)
+                data_type_dictionary[key] = data.dtype
         elif type(data) is str:
             feature[key] = _bytes_feature(tf.constant(data))
             if key not in image_dictionary_for_pickle:
@@ -203,8 +204,9 @@ def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_
         np.random.shuffle(perm)
         dict_keys = dict_keys[perm]
     features = OrderedDict()
+    d_type = OrderedDict()
     for image_path in dict_keys:
-        example_proto = return_example_proto(overall_dict[image_path], features)
+        example_proto = return_example_proto(overall_dict[image_path], features, d_type)
         writer.write(example_proto.SerializeToString())
         examples += 1
     writer.close()
@@ -212,6 +214,7 @@ def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_
     fid.write(str(examples))
     fid.close()
     save_obj(filename.replace('.tfrecord','_features.pkl'),features)
+    save_obj(filename.replace('.tfrecord','_dtype.pkl'), d_type)
     print('Finished!')
     stop = time.time()
     print('Took {} seconds'.format(stop-start))
