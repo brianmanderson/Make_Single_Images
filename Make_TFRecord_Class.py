@@ -136,7 +136,7 @@ def worker_def(A):
 
 
 def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_count() * .9 - 1),
-                    is_3D=True, extension=np.inf, shuffle=False, image_processors=None):
+                    is_3D=True, extension=np.inf, shuffle=True, image_processors=None):
     '''
     :param path: path to where Overall_Data and mask files are located
     :param record_name: name of record, without .tfrecord attached
@@ -199,6 +199,7 @@ def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_
     writer = tf.io.TFRecordWriter(filename)
     dict_keys = overall_dict.keys()
     if shuffle:
+        print('Shuffling examples...')
         dict_keys = np.asarray(list(overall_dict.keys()))
         perm = np.arange(len(dict_keys))
         np.random.shuffle(perm)
