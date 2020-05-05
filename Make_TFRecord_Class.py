@@ -92,7 +92,7 @@ def serialize_example(image_path, annotation_path, overall_dict={}, image_proces
 
 
 def down_dictionary(input_dictionary, out_dictionary=OrderedDict(), out_index=0):
-    if 'image' in input_dictionary.keys():
+    if 'image_path' in input_dictionary.keys():
         out_dictionary['Example_{}'.format(out_index)] = input_dictionary
         out_index += 1
         return out_dictionary, out_index
@@ -103,14 +103,9 @@ def down_dictionary(input_dictionary, out_dictionary=OrderedDict(), out_index=0)
 
 
 def get_features(image_path, annotation_path, image_processors=None):
-    image_handle, annotation_handle = sitk.ReadImage(image_path), sitk.ReadImage(annotation_path)
     features = OrderedDict()
-    annotation = sitk.GetArrayFromImage(annotation_handle).astype('int8')
-    image = sitk.GetArrayFromImage(image_handle).astype('float32')
-    features['image'] = image
-    features['annotation'] = annotation
     features['image_path'] = image_path
-    features['spacing'] = np.asarray(annotation_handle.GetSpacing(), dtype='float32')
+    features['annotation_path'] = annotation_path
     if image_processors is not None:
         for image_processor in image_processors:
             features, _ = down_dictionary(features, OrderedDict(), 0)
@@ -136,7 +131,7 @@ def worker_def(A):
 
 
 def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_count() * .5),
-                    is_3D=True, extension=np.inf, shuffle=True, image_processors=None):
+                    is_3D=True, extension=np.inf, shuffle=True, image_processors=None, special_actions=False):
     '''
     :param path: path to where Overall_Data and mask files are located
     :param record_name: name of record, without .tfrecord attached
@@ -152,9 +147,11 @@ def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_
     start = time.time()
     if image_processors is None:
         if is_3D:
-            image_processors = [Clip_Images_By_Extension(extension=extension), Distribute_into_3D()]
+            image_processors = [Add_Images_And_Annotations(), Clip_Images_By_Extension(extension=extension), Distribute_into_3D()]
         else:
-            image_processors = [Clip_Images_By_Extension(extension=extension), Distribute_into_2D()]
+            image_processors = [Add_Images_And_Annotations(), Clip_Images_By_Extension(extension=extension), Distribute_into_2D()]
+    if not special_actions and Add_Images_And_Annotations() not in image_processors:
+        image_processors = [Add_Images_And_Annotations()] + image_processors
     add = ''
     if record_name is None:
         record_name = 'Record'
