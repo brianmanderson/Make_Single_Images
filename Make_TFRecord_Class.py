@@ -130,7 +130,7 @@ def worker_def(A):
             q.task_done()
 
 
-def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_count() * .5),
+def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_count() * .5), out_path=None,
                     is_3D=True, extension=np.inf, shuffle=True, image_processors=None, special_actions=False):
     '''
     :param path: path to where Overall_Data and mask files are located
@@ -144,6 +144,8 @@ def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_
     :param image_processors: a list of image processes that can take the image and annotation dictionary, follow the
     :return:
     '''
+    if out_path is None:
+        out_path = path
     start = time.time()
     if image_processors is None:
         if is_3D:
@@ -160,7 +162,7 @@ def write_tf_record(path, record_name=None, rewrite=False, thread_count=int(cpu_
             add = '_3D'
     else:
         record_name = record_name.split('.tfrecord')[0]
-    filename = os.path.join(path,'{}{}.tfrecord'.format(record_name,add))
+    filename = os.path.join(out_path,'{}{}.tfrecord'.format(record_name,add))
     if os.path.exists(filename) and not rewrite:
         return None
     data_dict = {'Images':{}, 'Annotations':{}}
