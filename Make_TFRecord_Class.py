@@ -41,7 +41,6 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
     '''
     if out_path is None:
         out_path = niftii_path
-    start = time.time()
     if image_processors is None:
         if is_3D:
             image_processors = [Add_Images_And_Annotations(), Clip_Images_By_Extension(extension=extension), Distribute_into_3D()]
@@ -52,7 +51,6 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
 
     has_writer = np.max([isinstance(i,Record_Writer) for i in image_processors])
     assert not has_writer, 'Just provide an out_path, the Record_Writer is already provided'
-    image_processors += [Record_Writer(out_path)]
     data_dict = {'Images':{}, 'Annotations':{}}
     image_files = [i for i in os.listdir(niftii_path) if i.find('Overall_Data') == 0]
     for file in image_files:
@@ -63,7 +61,6 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
     for file in annotation_files:
         iteration = file.split('_y')[-1].split('.')[0]
         data_dict['Annotations'][iteration] = os.path.join(niftii_path,file)
-    overall_dict = OrderedDict()
     q = Queue(maxsize=thread_count)
     A = [q,]
     threads = []
@@ -74,8 +71,8 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
     iterations = list(data_dict['Images'].keys())
     for iteration in iterations:
         image_path, annotation_path = data_dict['Images'][iteration], data_dict['Annotations'][iteration]
-        item = {'image_path':image_path,'annotation_path':annotation_path,'overall_dict':overall_dict,
-                'image_processors':image_processors}
+        item = {'image_path':image_path,'annotation_path':annotation_path,
+                'image_processors':image_processors, 'record_writer':Record_Writer(out_path)}
         image_name = os.path.split(image_path)[-1].split('.nii')[0]
         if not os.path.exists(os.path.join(out_path,'{}.tfrecord'.format(image_name))) or rewrite:
             print(image_path)
