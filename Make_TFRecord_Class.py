@@ -26,7 +26,7 @@ def worker_def(A):
 
 
 def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(cpu_count() * .5),
-                    is_3D=True, extension=np.inf, image_processors=None, special_actions=False):
+                    is_3D=True, extension=np.inf, image_processors=None, special_actions=False, verbose=False):
     '''
     :param path: path to where Overall_Data and mask files are located
     :param record_name: name of record, without .tfrecord attached
@@ -69,10 +69,11 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
         t.start()
         threads.append(t)
     iterations = list(data_dict['Images'].keys())
-    for iteration in iterations:
+    for iteration in iterations[:10]:
         image_path, annotation_path = data_dict['Images'][iteration], data_dict['Annotations'][iteration]
         item = {'image_path':image_path,'annotation_path':annotation_path,
-                'image_processors':image_processors, 'record_writer':Record_Writer(out_path)}
+                'image_processors':image_processors, 'record_writer':Record_Writer(out_path),
+                'verbose':verbose}
         image_name = os.path.split(image_path)[-1].split('.nii')[0]
         if not os.path.exists(os.path.join(out_path,'{}.tfrecord'.format(image_name))) or rewrite:
             print(image_path)
