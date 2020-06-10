@@ -69,7 +69,7 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
         t.start()
         threads.append(t)
     iterations = list(data_dict['Images'].keys())
-    for iteration in iterations[:10]:
+    for iteration in iterations:
         image_path, annotation_path = data_dict['Images'][iteration], data_dict['Annotations'][iteration]
         item = {'image_path':image_path,'annotation_path':annotation_path,
                 'image_processors':image_processors, 'record_writer':Record_Writer(out_path),
