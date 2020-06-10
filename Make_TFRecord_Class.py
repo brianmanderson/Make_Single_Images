@@ -25,18 +25,20 @@ def worker_def(A):
             q.task_done()
 
 
-def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(cpu_count() * .5),
+def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(cpu_count() * .5), max_records=np.inf,
                     is_3D=True, extension=np.inf, image_processors=None, special_actions=False, verbose=False):
     '''
-    :param path: path to where Overall_Data and mask files are located
-    :param record_name: name of record, without .tfrecord attached
+    :param niftii_path: path to where Overall_Data and mask files are located
+    :param out_path: path that we will write records to
     :param rewrite: Do you want to rewrite old records? True/False
     :param thread_count: specify 1 if debugging
-    :param wanted_values_for_bboxes: A list of values that you want to calc bbox for [1,2,etc.]
+    :param max_records: Can specify max number of records, for debugging purposes
     :param extension: extension above and below annotation, recommend np.inf for validation and test
     :param is_3D: Take the whole patient or break up into 2D images
-    :param shuffle: shuffle the output examples? Can be useful to allow for a smaller buffer without worrying about distribution
-    :param image_processors: a list of image processes that can take the image and annotation dictionary, follow the
+    :param image_processors: a list of image processes that can take the image and annotation dictionary,
+        see Image_Processors, TF_Record
+    :param special_actions: if you're doing something special and don't want Add_Images_And_Annotations
+    :param verbose: Binary, print processors as they go
     :return:
     '''
     if out_path is None:
@@ -69,6 +71,7 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
         t.start()
         threads.append(t)
     iterations = list(data_dict['Images'].keys())
+    iterations = iterations[:min([max_records, len(iterations)])]
     for iteration in iterations:
         image_path, annotation_path = data_dict['Images'][iteration], data_dict['Annotations'][iteration]
         item = {'image_path':image_path,'annotation_path':annotation_path,
