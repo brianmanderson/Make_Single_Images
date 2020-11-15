@@ -25,13 +25,13 @@ def worker_def(a):
             q.task_done()
 
 
-def return_data_paths_and_iterations(niftii_path, out_path):
+def return_data_dict(niftii_path, out_path):
     data_dict = {}
     image_files = [i for i in os.listdir(niftii_path) if i.find('Overall_Data') == 0]
-    for index, file in image_files:
+    for file in image_files:
         iteration = file.split('_')[-1].split('.')[0]
         data_dict[iteration] = {'image_path': os.path.join(niftii_path, file),
-                                'out_path': os.path.join(out_path, file.split('.nii')[0])}
+                                'out_path': os.path.join(out_path, '{}.tfrecord'.format(file.split('.nii')[0]))}
 
     annotation_files = [i for i in os.listdir(niftii_path) if i.find('Overall_mask') == 0]
     for file in annotation_files:
@@ -80,7 +80,7 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
         t.start()
         threads.append(t)
     if file_passer is None:
-        data_dict = return_data_paths_and_iterations(niftii_path=niftii_path, out_path=out_path)
+        data_dict = return_data_dict(niftii_path=niftii_path, out_path=out_path)
     else:
         data_dict = file_passer(niftii_path)
     counter = 0
