@@ -25,8 +25,24 @@ def worker_def(a):
             q.task_done()
 
 
+def return_data_paths_and_iterations(niftii_path, out_path):
+    data_dict = {}
+    image_files = [i for i in os.listdir(niftii_path) if i.find('Overall_Data') == 0]
+    for index, file in image_files:
+        iteration = file.split('_')[-1].split('.')[0]
+        data_dict[iteration] = {'image_path': os.path.join(niftii_path, file),
+                                'out_path': os.path.join(out_path, file.split('.nii')[0])}
+
+    annotation_files = [i for i in os.listdir(niftii_path) if i.find('Overall_mask') == 0]
+    for file in annotation_files:
+        iteration = file.split('_y')[-1].split('.')[0]
+        data_dict[iteration]['annotation_path'] = os.path.join(niftii_path, file)
+    return data_dict
+
+
 def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(cpu_count() * .5), max_records=np.inf,
-                    is_3D=True, extension=np.inf, image_processors=None, special_actions=False, verbose=False):
+                    is_3D=True, extension=np.inf, image_processors=None, special_actions=False, verbose=False,
+                    file_passer=None):
     """
     :param niftii_path: path to where Overall_Data and mask files are located
     :param out_path: path that we will write records to
@@ -55,16 +71,7 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
 
     has_writer = np.max([isinstance(i, Record_Writer) for i in image_processors])
     assert not has_writer, 'Just provide an out_path, the Record_Writer is already provided'
-    data_dict = {'Images': {}, 'Annotations': {}}
-    image_files = [i for i in os.listdir(niftii_path) if i.find('Overall_Data') == 0]
-    for file in image_files:
-        iteration = file.split('_')[-1].split('.')[0]
-        data_dict['Images'][iteration] = os.path.join(niftii_path, file)
 
-    annotation_files = [i for i in os.listdir(niftii_path) if i.find('Overall_mask') == 0]
-    for file in annotation_files:
-        iteration = file.split('_y')[-1].split('.')[0]
-        data_dict['Annotations'][iteration] = os.path.join(niftii_path, file)
     q = Queue(maxsize=thread_count)
     a = [q, ]
     threads = []
@@ -72,17 +79,24 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
         t = Thread(target=worker_def, args=(a,))
         t.start()
         threads.append(t)
-    iterations = list(data_dict['Images'].keys())
-    iterations = iterations[:min([max_records, len(iterations)])]
-    for iteration in iterations:
-        image_path, annotation_path = data_dict['Images'][iteration], data_dict['Annotations'][iteration]
-        item = {'image_path': image_path, 'annotation_path': annotation_path,
-                'image_processors': image_processors, 'record_writer': Record_Writer(out_path),
-                'verbose': verbose}
-        image_name = os.path.split(image_path)[-1].split('.nii')[0]
-        if not os.path.exists(os.path.join(out_path, '{}.tfrecord'.format(image_name))) or rewrite:
-            print(image_path)
+    if file_passer is None:
+        data_dict = return_data_paths_and_iterations(niftii_path=niftii_path, out_path=out_path)
+    else:
+        data_dict = file_passer(niftii_path)
+    counter = 0
+    for iteration in data_dict.keys():
+        item = data_dict[iteration]
+        assert 'out_path' in item.keys(), 'Need to pass an out_path to your file_passer. Look at the example above.'
+        out_file = item['out_path']
+        if not os.path.exists(out_file) or rewrite:
+            print('Working on {}'.format(out_file))
+            item['image_processors'] = image_processors
+            item['record_writer'] = Record_Writer(out_file)
+            item['verbose'] = verbose
             q.put(item)
+        counter += 1
+        if counter > max_records:
+            break
     for i in range(thread_count):
         q.put(None)
     for t in threads:
