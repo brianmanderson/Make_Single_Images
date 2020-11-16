@@ -31,7 +31,8 @@ def return_data_dict(niftii_path, out_path):
     for file in image_files:
         iteration = file.split('_')[-1].split('.')[0]
         data_dict[iteration] = {'image_path': os.path.join(niftii_path, file),
-                                'out_path': os.path.join(out_path, '{}.tfrecord'.format(file.split('.nii')[0]))}
+                                'out_path': out_path,
+                                'out_file': os.path.join(out_path, '{}.tfrecord'.format(file.split('.nii')[0]))}
 
     annotation_files = [i for i in os.listdir(niftii_path) if i.find('Overall_mask') == 0]
     for file in annotation_files:
@@ -61,13 +62,21 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
         out_path = niftii_path
     if image_processors is None:
         if is_3D:
-            image_processors = [Add_Images_And_Annotations(), Clip_Images_By_Extension(extension=extension),
+            image_processors = [Add_Images_And_Annotations(),
+                                Clip_Images_By_Extension(extension=extension),
                                 Distribute_into_3D()]
         else:
-            image_processors = [Add_Images_And_Annotations(), Clip_Images_By_Extension(extension=extension),
+            image_processors = [Add_Images_And_Annotations(),
+                                Clip_Images_By_Extension(extension=extension),
                                 Distribute_into_2D()]
-    if not special_actions and Add_Images_And_Annotations() not in image_processors:
-        image_processors = [Add_Images_And_Annotations()] + image_processors
+    if not special_actions:
+        add_images_and_annotations = True
+        for processor in image_processors:
+            if type(processor) is Add_Images_And_Annotations:
+                add_images_and_annotations = False
+                break
+        if add_images_and_annotations:
+            image_processors = [Add_Images_And_Annotations()] + image_processors
 
     has_writer = np.max([isinstance(i, Record_Writer) for i in image_processors])
     assert not has_writer, 'Just provide an out_path, the Record_Writer is already provided'
@@ -87,13 +96,15 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
     for iteration in data_dict.keys():
         item = data_dict[iteration]
         assert 'out_path' in item.keys(), 'Need to pass an out_path to your file_parser. Look at return_data_dict()'
-        out_file = item['out_path']
+        out_file = item['out_file']
         if not os.path.exists(out_file) or rewrite:
+            input_item = OrderedDict()
+            input_item['input_features_dictionary'] = item
             print('Working on {}'.format(out_file))
-            item['image_processors'] = image_processors
-            item['record_writer'] = Record_Writer(out_file)
-            item['verbose'] = verbose
-            q.put(item)
+            input_item['image_processors'] = image_processors
+            input_item['record_writer'] = Record_Writer(out_path=out_path, out_file=out_file)
+            input_item['verbose'] = verbose
+            q.put(input_item)
         counter += 1
         if counter > max_records:
             break
