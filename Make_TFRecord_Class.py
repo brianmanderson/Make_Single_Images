@@ -42,7 +42,7 @@ def return_data_dict(niftii_path, out_path):
 
 def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(cpu_count() * .5), max_records=np.inf,
                     is_3D=True, extension=np.inf, image_processors=None, special_actions=False, verbose=False,
-                    file_passer=None):
+                    file_parser=None):
     """
     :param niftii_path: path to where Overall_Data and mask files are located
     :param out_path: path that we will write records to
@@ -79,14 +79,14 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
         t = Thread(target=worker_def, args=(a,))
         t.start()
         threads.append(t)
-    if file_passer is None:
+    if file_parser is None:
         data_dict = return_data_dict(niftii_path=niftii_path, out_path=out_path)
     else:
-        data_dict = file_passer(niftii_path)
+        data_dict = file_parser(niftii_path)
     counter = 0
     for iteration in data_dict.keys():
         item = data_dict[iteration]
-        assert 'out_path' in item.keys(), 'Need to pass an out_path to your file_passer. Look at the example above.'
+        assert 'out_path' in item.keys(), 'Need to pass an out_path to your file_parser. Look at return_data_dict()'
         out_file = item['out_path']
         if not os.path.exists(out_file) or rewrite:
             print('Working on {}'.format(out_file))
