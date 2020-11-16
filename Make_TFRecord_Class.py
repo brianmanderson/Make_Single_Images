@@ -82,7 +82,7 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
     if file_parser is None:
         data_dict = return_data_dict(niftii_path=niftii_path, out_path=out_path)
     else:
-        data_dict = file_parser(niftii_path)
+        data_dict = file_parser(**locals())
     counter = 0
     for iteration in data_dict.keys():
         item = data_dict[iteration]
