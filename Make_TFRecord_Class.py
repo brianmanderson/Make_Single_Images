@@ -25,8 +25,25 @@ def worker_def(a):
             q.task_done()
 
 
+def return_data_dict(niftii_path, out_path):
+    data_dict = {}
+    image_files = [i for i in os.listdir(niftii_path) if i.find('Overall_Data') == 0]
+    for file in image_files:
+        iteration = file.split('_')[-1].split('.')[0]
+        data_dict[iteration] = {'image_path': os.path.join(niftii_path, file),
+                                'out_path': out_path,
+                                'out_file': os.path.join(out_path, '{}.tfrecord'.format(file.split('.nii')[0]))}
+
+    annotation_files = [i for i in os.listdir(niftii_path) if i.find('Overall_mask') == 0]
+    for file in annotation_files:
+        iteration = file.split('_y')[-1].split('.')[0]
+        data_dict[iteration]['annotation_path'] = os.path.join(niftii_path, file)
+    return data_dict
+
+
 def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(cpu_count() * .5), max_records=np.inf,
-                    is_3D=True, extension=np.inf, image_processors=None, special_actions=False, verbose=False):
+                    is_3D=True, extension=np.inf, image_processors=None, special_actions=False, verbose=False,
+                    file_parser=None, debug=False):
     """
     :param niftii_path: path to where Overall_Data and mask files are located
     :param out_path: path that we will write records to
@@ -45,48 +62,62 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
         out_path = niftii_path
     if image_processors is None:
         if is_3D:
-            image_processors = [Add_Images_And_Annotations(), Clip_Images_By_Extension(extension=extension),
+            image_processors = [Add_Images_And_Annotations(),
+                                Clip_Images_By_Extension(extension=extension),
                                 Distribute_into_3D()]
         else:
-            image_processors = [Add_Images_And_Annotations(), Clip_Images_By_Extension(extension=extension),
+            image_processors = [Add_Images_And_Annotations(),
+                                Clip_Images_By_Extension(extension=extension),
                                 Distribute_into_2D()]
-    if not special_actions and Add_Images_And_Annotations() not in image_processors:
-        image_processors = [Add_Images_And_Annotations()] + image_processors
+    if not special_actions:
+        add_images_and_annotations = True
+        for processor in image_processors:
+            if type(processor) is Add_Images_And_Annotations:
+                add_images_and_annotations = False
+                break
+        if add_images_and_annotations:
+            image_processors = [Add_Images_And_Annotations()] + image_processors
 
     has_writer = np.max([isinstance(i, Record_Writer) for i in image_processors])
     assert not has_writer, 'Just provide an out_path, the Record_Writer is already provided'
-    data_dict = {'Images': {}, 'Annotations': {}}
-    image_files = [i for i in os.listdir(niftii_path) if i.find('Overall_Data') == 0]
-    for file in image_files:
-        iteration = file.split('_')[-1].split('.')[0]
-        data_dict['Images'][iteration] = os.path.join(niftii_path, file)
 
-    annotation_files = [i for i in os.listdir(niftii_path) if i.find('Overall_mask') == 0]
-    for file in annotation_files:
-        iteration = file.split('_y')[-1].split('.')[0]
-        data_dict['Annotations'][iteration] = os.path.join(niftii_path, file)
-    q = Queue(maxsize=thread_count)
-    a = [q, ]
     threads = []
-    for worker in range(thread_count):
-        t = Thread(target=worker_def, args=(a,))
-        t.start()
-        threads.append(t)
-    iterations = list(data_dict['Images'].keys())
-    iterations = iterations[:min([max_records, len(iterations)])]
-    for iteration in iterations:
-        image_path, annotation_path = data_dict['Images'][iteration], data_dict['Annotations'][iteration]
-        item = {'image_path': image_path, 'annotation_path': annotation_path,
-                'image_processors': image_processors, 'record_writer': Record_Writer(out_path),
-                'verbose': verbose}
-        image_name = os.path.split(image_path)[-1].split('.nii')[0]
-        if not os.path.exists(os.path.join(out_path, '{}.tfrecord'.format(image_name))) or rewrite:
-            print(image_path)
-            q.put(item)
-    for i in range(thread_count):
-        q.put(None)
-    for t in threads:
-        t.join()
+    q = None
+    if not debug:
+        q = Queue(maxsize=thread_count)
+        a = [q, ]
+        for worker in range(thread_count):
+            t = Thread(target=worker_def, args=(a,))
+            t.start()
+            threads.append(t)
+    if file_parser is None:
+        data_dict = return_data_dict(niftii_path=niftii_path, out_path=out_path)
+    else:
+        data_dict = file_parser(**locals())
+    counter = 0
+    for iteration in data_dict.keys():
+        item = data_dict[iteration]
+        assert 'out_path' in item.keys(), 'Need to pass an out_path to your file_parser. Look at return_data_dict()'
+        out_file = item['out_file']
+        if not os.path.exists(out_file) or rewrite:
+            input_item = OrderedDict()
+            input_item['input_features_dictionary'] = item
+            print('Working on {}'.format(out_file))
+            input_item['image_processors'] = image_processors
+            input_item['record_writer'] = Record_Writer(out_path=out_path, out_file=out_file)
+            input_item['verbose'] = verbose
+            if not debug:
+                q.put(input_item)
+            else:
+                serialize_example(**input_item)
+        counter += 1
+        if counter > max_records:
+            break
+    if not debug:
+        for i in range(thread_count):
+            q.put(None)
+        for t in threads:
+            t.join()
     return None
 
 
