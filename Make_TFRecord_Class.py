@@ -43,7 +43,7 @@ def return_data_dict(niftii_path, out_path):
 
 def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(cpu_count() * .5), max_records=np.inf,
                     is_3D=True, extension=np.inf, image_processors=None, special_actions=False, verbose=False,
-                    file_parser=None):
+                    file_parser=None, debug=False):
     """
     :param niftii_path: path to where Overall_Data and mask files are located
     :param out_path: path that we will write records to
@@ -81,13 +81,15 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
     has_writer = np.max([isinstance(i, Record_Writer) for i in image_processors])
     assert not has_writer, 'Just provide an out_path, the Record_Writer is already provided'
 
-    q = Queue(maxsize=thread_count)
-    a = [q, ]
     threads = []
-    for worker in range(thread_count):
-        t = Thread(target=worker_def, args=(a,))
-        t.start()
-        threads.append(t)
+    q = None
+    if not debug:
+        q = Queue(maxsize=thread_count)
+        a = [q, ]
+        for worker in range(thread_count):
+            t = Thread(target=worker_def, args=(a,))
+            t.start()
+            threads.append(t)
     if file_parser is None:
         data_dict = return_data_dict(niftii_path=niftii_path, out_path=out_path)
     else:
@@ -104,14 +106,18 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
             input_item['image_processors'] = image_processors
             input_item['record_writer'] = Record_Writer(out_path=out_path, out_file=out_file)
             input_item['verbose'] = verbose
-            q.put(input_item)
+            if not debug:
+                q.put(input_item)
+            else:
+                serialize_example(**input_item)
         counter += 1
         if counter > max_records:
             break
-    for i in range(thread_count):
-        q.put(None)
-    for t in threads:
-        t.join()
+    if not debug:
+        for i in range(thread_count):
+            q.put(None)
+        for t in threads:
+            t.join()
     return None
 
 
