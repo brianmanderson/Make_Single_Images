@@ -110,7 +110,7 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
             else:
                 serialize_example(**input_item)
         counter += 1
-        if counter > max_records:
+        if counter >= max_records:
             break
     if not debug:
         for i in range(thread_count):
