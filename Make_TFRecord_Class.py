@@ -42,7 +42,7 @@ def return_data_dict(niftii_path):
 
 def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(cpu_count() * .5), max_records=np.inf,
                     is_3D=True, extension=np.inf, image_processors=None, special_actions=False, verbose=False,
-                    file_parser=None, debug=False, file_name_key='file_name', recordwriter=None):
+                    file_parser=None, debug=False, recordwriter=None):
     """
     :param niftii_path: path to where Overall_Data and mask files are located
     :param out_path: path that we will write records to
@@ -55,7 +55,6 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
         see Image_Processors, TF_Record
     :param special_actions: if you're doing something special and don't want Add_Images_And_Annotations
     :param verbose: Binary, print processors as they go
-    :param file_name_key: string key for what the file_name is, this will be used as the base for the tfrecord
     :return:
     """
     if out_path is None:
@@ -78,8 +77,7 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
         if add_images_and_annotations:
             image_processors = [Add_Images_And_Annotations()] + image_processors
     if recordwriter is None:
-        recordwriter = RecordWriter(out_path=out_path, file_name_key=file_name_key)
-
+        recordwriter = RecordWriter(out_path=out_path, file_name_key='file_name', rewrite=rewrite)
     threads = []
     q = None
     if not debug:
@@ -96,19 +94,15 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
     counter = 0
     for iteration in data_dict.keys():
         item = data_dict[iteration]
-        assert file_name_key in item.keys(), 'Need to pass {} to your file_parser'.format(file_name_key)
-        out_file = item[file_name_key]
-        if not os.path.exists(os.path.join(out_path, out_file)) or rewrite:
-            input_item = OrderedDict()
-            input_item['input_features_dictionary'] = item
-            print('Working on {}'.format(out_file))
-            input_item['image_processors'] = image_processors
-            input_item['record_writer'] = recordwriter
-            input_item['verbose'] = verbose
-            if not debug:
-                q.put(input_item)
-            else:
-                serialize_example(**input_item)
+        input_item = OrderedDict()
+        input_item['input_features_dictionary'] = item
+        input_item['image_processors'] = image_processors
+        input_item['record_writer'] = recordwriter
+        input_item['verbose'] = verbose
+        if not debug:
+            q.put(input_item)
+        else:
+            serialize_example(**input_item)
         counter += 1
         if counter >= max_records:
             break
