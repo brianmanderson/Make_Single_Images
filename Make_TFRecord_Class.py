@@ -92,8 +92,7 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
     else:
         data_dict = file_parser(**locals())
     counter = 0
-    iterations = ['22', '15', '30', '29', '45', '46', '49', '50', '51', '52', '53', '54']
-    for iteration in iterations:  # data_dict.keys()
+    for iteration in data_dict.keys():
         item = data_dict[iteration]
         input_item = OrderedDict()
         input_item['input_features_dictionary'] = item
