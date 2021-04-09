@@ -6,6 +6,7 @@ from .Image_Processors_Module.src.Processors.MakeTFRecordProcessors import *
 from .Image_Processors_Module.Plot_And_Scroll_Images.Plot_Scroll_Images import plot_scroll_Image
 from _collections import OrderedDict
 from threading import Thread
+import copy
 from multiprocessing import cpu_count
 from queue import *
 
@@ -93,7 +94,7 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
         data_dict = file_parser(**locals())
     counter = 0
     for iteration in data_dict.keys():
-        item = data_dict[iteration]
+        item = copy.deepcopy(data_dict[iteration])
         input_item = OrderedDict()
         input_item['input_features_dictionary'] = item
         input_item['image_processors'] = image_processors
