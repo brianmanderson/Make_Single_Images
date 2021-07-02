@@ -3,6 +3,7 @@ __author__ = 'Brian M Anderson'
 # Created on 4/7/2020
 
 from .Image_Processors_Module.src.Processors.MakeTFRecordProcessors import *
+from .Image_Processors_Module.src.Processors.TFRecordWriter import *
 from .Image_Processors_Module.Plot_And_Scroll_Images.Plot_Scroll_Images import plot_scroll_Image
 from _collections import OrderedDict
 from threading import Thread
