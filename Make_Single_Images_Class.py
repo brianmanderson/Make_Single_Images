@@ -4,8 +4,8 @@ import SimpleITK as sitk
 from threading import Thread
 from multiprocessing import cpu_count
 from queue import *
-from .Image_Processors_Module.Resample_Class.Resample_Class import Resample_Class_Object
-from .Image_Processors_Module.Plot_And_Scroll_Images.Plot_Scroll_Images import plot_scroll_Image
+from NiftiResampler.ResampleTools import Resample_Class_Object
+from PlotScrollNumpyArrays.Plot_Scroll_Images import plot_scroll_Image
 
 
 def save_obj(path, obj): # Save almost anything.. dictionary, list, etc.
