@@ -44,7 +44,7 @@ def return_data_dict(niftii_path):
 
 def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(cpu_count() * .5), max_records=np.inf,
                     is_3D=True, extension=np.inf, image_processors=None, special_actions=False, verbose=False,
-                    file_parser=None, debug=False, recordwriter=None):
+                    file_parser=None, debug=False, recordwriter=None, **kwargs):
     """
     :param niftii_path: path to where Overall_Data and mask files are located
     :param out_path: path that we will write records to
@@ -92,7 +92,7 @@ def write_tf_record(niftii_path, out_path=None, rewrite=False, thread_count=int(
     if file_parser is None:
         data_dict = return_data_dict(niftii_path=niftii_path)
     else:
-        data_dict = file_parser(**locals())
+        data_dict = file_parser(**locals(), **kwargs)
     counter = 0
     for iteration in data_dict.keys():
         item = copy.deepcopy(data_dict[iteration])
