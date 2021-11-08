@@ -1,5 +1,5 @@
 ## If you find this code useful, please provide a reference to my github page for others www.github.com/brianmanderson , thank you!
-### This builds off of the function found here https://github.com/brianmanderson/Dicom_Data_to_Numpy_Arrays and into https://github.com/brianmanderson/Data_Generators
+### This builds off of the function found here https://github.com/brianmanderson/Dicom_RT_and_Images_to_Mask and into https://github.com/brianmanderson/Data_Generators
 
 ## You can now resample the images during this process!
 
